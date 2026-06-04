@@ -59,7 +59,7 @@ xlshtns2list= (glob.glob("../data/intensiteit-snelheid-htn-20??-s2.xlsx"))
 xlshtns2list
 
 # +
-some_string="""Fecode,Drglpt,Volledige naam,Traject,GPSX,GPSY
+some_string="""Fecode,ID,Volledige naam,Traject,GPSX,GPSY
 623,Utln,Utrecht Lunetten,Ut-Ht,5.1441664696,52.0655555725
 340,Htn,Houten,Ut-Gdm,5.16821,52.03402
 335,Htnc,Houten Castellum,Ut-Gdm,5.17949,52.01701
@@ -81,14 +81,55 @@ stationplc
 
 if (not suprtests):
     odfhtn= ndwimport.ndw_od_read_overzicht(xlshtns2list[0],"testseq12","testcoll20260522")
+    odfbnk= ndwimport.ndw_od_read_overzicht("../data/intensiteit-snelheid-a12bnk-2025-s2.xlsx","locbnk","testcoll20260522")    
+    #odfbnk=odfbnk[odfbnk['Lengtegraad']>5]
+#    display(odfbnk)
     fig, ax = plt.subplots()
     pland= odfhtn.plot(alpha=0.4,color='blue',ax=ax)
     pland= ndwimport.odf.plot(alpha=0.4,color='yellow',ax=ax)
+    pland= odfbnk.plot(alpha=0.4,color='grey',ax=ax)
     pland= ndwimport.odf12.plot(alpha=0.4,color='red',ax=ax)
     pland= stationplc.plot(alpha=0.4,color='green',ax=ax)
     cx.add_basemap(pland, source= ndwimport.prov0,crs=ndwimport.odf.crs)
     figname = "../output/htnmeetptov.png";
     fig.savefig(figname,dpi=300)
+
+
+
+allgem_CBSsum=pd.read_pickle ("../data/gem1sum_GM0321.pkl")
+
+# +
+plot_crs=3857
+plot_crs="epsg:28992"
+gdc=[]
+def add_geodict(gdf,gd2,ax,colv,labelv):
+    gdfrds= gdf.to_crs(crs=plot_crs)
+    gd2.append(gdfrds)
+    return gdfrds.plot(ax=ax,alpha=0.4,color=colv,label=labelv)
+
+if (not suprtests):   
+    fig, ax = plt.subplots()
+    allgem_CBSsum.set_crs(crs="epsg:28992")
+    pland=allgem_CBSsum.boundary.plot(color='green',alpha=0.1,ax=ax)
+    cx.add_basemap(pland, source= ndwimport.prov0,crs=plot_crs)
+    pland= add_geodict(ndwimport.odf,gdc,ax,'yellow','overig a27')
+    pland= add_geodict( odfbnk,gdc,ax,'grey','overig bnk')
+    pland= add_geodict( ndwimport.odf12,gdc,ax,'red','overig a12')
+    pland= add_geodict(  stationplc,gdc,ax,'green','OV, pont')
+    pland= add_geodict( odfhtn,gdc,ax,'blue','Gebruikt htn')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    figname = "../output/htnmeetptovgg.png";
+    fig.savefig(figname,dpi=300)
+    namesptsx=(pd.concat(gdc).copy().set_index('ID')['geometry'].x.to_dict())
+    namesptsy=(pd.concat(gdc).copy().set_index('ID')['geometry'].y.to_dict())
+    #display(namespts)
+
+# +
+#namesptsx
+
+# +
+#odfhtn
+# -
 
 idfhtnmy =[ ndwimport.ndw_od_read_overzicht_en_intensiteiten(testfil,"htnmy",testfil) for testfil in xlshtns2list ]
 idfhtnmy=pd.concat(idfhtnmy)
@@ -116,9 +157,9 @@ if (not suprtests):
 cdata27hmy=ndwimport.corrcol(rdata27hmy,'a27','Intensiteit',usefactsa27hmy,'IntensiteitCorr')  
 ndwimport.ilowhihmplt(cdata27hmy,'a27','IntensiteitCorr',['perstart'])      
 
-edata27hmy=ndwimport.estcol(cdata27hmy,'a27',ndwimport.calendafter,'IntensiteitCorr','IntensiteitEst') 
+edata27hmy=ndwimport.estcol(cdata27hmy,'a27','IntensiteitCorr','IntensiteitEst') 
 
-ndwimport.plttimesest(edata27hmy,'IntensiteitEst')  
+ndwimport.plttimesestmy(edata27hmy,'IntensiteitEst')  
 
 
 # +
@@ -176,30 +217,22 @@ h25ih=idf[idf['uur'].isna() == False]
 #let op: lijkt deels spitsstrook RWS01_MONIBAS_0270vwa0678ra	a27	678	r	af
 #67.5 = zoutopslag na oprit 28 , 69.1 = Euretco, r = richting noord (Euretco vanaf afslag 28)
 
-#PUT01_PUVIS_N409.07_0_2	n409	7	r	t
-#PUT01_PUVIS_N409.07_1_2	n409	7	l	t
-
-some_string="""ID	centrum	richting	Zoneinuit
-GEO1A_A_RWS_359819	Houten	A27Zuid	uit
-EST1A_A_EST_359850	Houten	A27Zuid	in
-GEO1A_A_RWS_359850	Houten	A27Noord	uit
-GEO1A_A_RWS_359853	Houten	A27Noord	in
-PUT01_N410.03_0	Houten	Odijk	uit
-PUT01_N410.03_1	Houten	Odijk	in
-PUT01_N421.01_0	Houten	A12west	uit
-PUT01_N421.01_1	Houten	A12west	in
-PUT01_PUVIS_N409.07_0_2	Houten	Laagraven	in
-PUT01_PUVIS_N409.07_1_2	Houten	Laagraven	uit
-RWS01_MONIBAS_0270vwa0678ra	deelsdoor	A27Zuid	in
-"""
+some_string="""ID	centrum	richting	Zoneinuit	estfrID	IDsinds	PlotPt	Drlov
+GEO1A_A_RWS_359819	Houten	A27Zuid	uit		2019-03-01	RWS01_MONIBAS_0271hrl0675ra	RWS01_MONIBAS_0271hrl0681ra
+EST1A_A_EST_359850	Houten	A27Zuid	in		2019-03-01	RWS01_MONIBAS_0271hrl0675ra	Htnc
+GEO1A_A_RWS_359850	Houten	A27Noord	uit		2019-03-01	RWS01_MONIBAS_0271hrr0680ra	RWS01_MONIBAS_0271hrr0678ra
+GEO1A_A_RWS_359853	Houten	A27Noord	in		2019-03-01	RWS01_MONIBAS_0271hrr0680ra	Htn
+PUT01_N410.03_0	Houten	Odijk	uit			PUT01_N410.03_0	Htn
+PUT01_N410.03_1	Houten	Odijk	in			PUT01_N410.03_0	Htn
+PUT01_N421.01_0	Houten	A12west	uit			PUT01_N421.01_0	PUT01_N410.03_0
+PUT01_N421.01_1	Houten	A12west	in			PUT01_N421.01_0	Htn
+PUT01_N409.01_0	Houten	Laagraven	in			PUT01_N409.01_0	PUT01_PUVIS_N409.07_0_2
+PUT01_N409.01_2	Houten	Laagraven	uit			PUT01_N409.01_0	PUT01_PUVIS_N409.07_0_2
+RWS01_MONIBAS_0270vwa0678ra	deelsdoor	A27Zuid	in"""
 #read CSV string into pandas DataFrame
 htncor_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 display(htncor_config)
-#merge_initest alleen als EST veld berekend moet worden
-if 1==1:
-    htncordta=idfhtnemy.merge(htncor_config,how='left')
-else:    
-    htncordta = ndwimport.merge_initest(idfhtnemy,htncor_config)
+htncordta = ndwimport.merge_initest(idfhtnemy,htncor_config,False)
 htncordta=htncordta[htncordta['centrum']=='Houten']
 htncordta['Balans']=htncordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * htncordta['Intensiteit']
 
@@ -207,8 +240,81 @@ htncordta['Balans']=htncordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * htncordta
 #htncordta.groupby(["ID"]).agg('sum')
 # -
 
-summs = htncordta.groupby(['centrum','richting','Zoneinuit','ID','perstart']).agg('sum')[['Intensiteit']]
-summs
+summs = htncordta.groupby(['centrum','richting','Zoneinuit','ID','perstart','PlotPt','Drlov']).agg('sum')[['Intensiteit']].reset_index()
+summs25=summs[summs['perstart'].dt.year.isin([2025])]
+summs25
+
+# +
+plot_crs=3857
+plot_crs="epsg:28992"
+pltparahtn={'scleft':134000, 'scright':147000,
+            'minttxsp':1000,
+            'geodx':namesptsx,'geody':namesptsy,
+           'totalpos':[136000,443000]}
+def plaxkm(x, pos=None):
+    return '%.0f'%(x/1000.)
+def show_numbers(summsi,ifield,ascale,tit,fn,pltpa):
+    totalar=[0,0,0]
+    geodictx =pltpa['geodx']
+    geodicty =pltpa['geody']
+    summs=summsi.copy()
+    summs['PlotPtx']= summs['PlotPt'].map(geodictx)
+    summs['PlotPty']= summs['PlotPt'].map(geodicty)
+    summs['Drlovx']= summs['Drlov'].map(geodictx)
+    summs['Drlovy']= summs['Drlov'].map(geodicty)
+    #display(summs)
+    fig, ax = plt.subplots()
+    pland=allgem_CBSsum.boundary.plot(color='green',alpha=0.05,ax=ax)
+    for index, row in summs.iterrows(): 
+        (lx,ly)=(row['PlotPtx'] , row['PlotPty'] )
+        (ldx,ldy)=(row['Drlovx'] , row['Drlovy'] )
+        (ldx,ldy)=(lx- ldx,ly- ldy)
+        lori= np.sqrt(ldx*ldx + ldy*ldy)
+        f= -1 if (row['Zoneinuit'] =='uit') else 1
+        totalar[1] +=f*row[ifield]
+        totalar[1-f] +=f*row[ifield]
+        fs=f*ascale*row[ifield]/lori        
+        (ex,ey)=(lx-ldx*fs,ly-ldy*fs)
+        #print ( (lx, ly, ldx, ldy) )
+        #ax.arrow(lx, ly, ldx, ldy)        
+        ax.annotate("",xytext=(ex,ey),xy=(lx, ly), 
+                    arrowprops=dict(arrowstyle="<-"))
+        ax.set_xlim(left=pltpa['scleft'], right=pltpa['scright'])
+        ft = f*max( abs(fs*1.1), pltpa['minttxsp']/lori  )
+        (ext,eyt)=(lx-ldx*ft,ly-ldy*ft)
+        ax.annotate("%5.0f"%(row[ifield]),xy=(ext,eyt),
+                   horizontalalignment='center',
+                   verticalalignment='center',alpha=0.5)
+    ax.annotate("in  %6.0f\n%6.0f\nuit %6.0f"%(totalar[0],totalar[1],totalar[2]),xy=pltpa['totalpos'])
+    cx.add_basemap(pland, source= ndwimport.prov0,crs=plot_crs)
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(plaxkm))
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(plaxkm))
+
+    #ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    ax.set_title(tit)
+    figname = "../output/"+fn+".png";
+    fig.savefig(figname,dpi=300)
+
+
+show_numbers(summs25,'Intensiteit',0.15,
+             'Werkdagen 2025 0-24 hrs','htnmeetptovar',pltparahtn)
+# -
+
+oshrs=[7,8]
+htncordtao= htncordta[htncordta['uur'].isin(oshrs)]
+summso = htncordtao.groupby(['centrum','richting','Zoneinuit','ID','perstart','PlotPt','Drlov']).agg('sum')[['Intensiteit']].reset_index()
+summs25o=summso[summso['perstart'].dt.year.isin([2025])]
+summs25o
+show_numbers(summs25o,'Intensiteit',1,
+             'Werkdagen 2025 7:00-9:00 hrs','htnmeetptovaro',pltparahtn)
+
+mshrs=[16,17]
+htncordtam= htncordta[htncordta['uur'].isin(mshrs)]
+summsm = htncordtam.groupby(['centrum','richting','Zoneinuit','ID','perstart','PlotPt','Drlov']).agg('sum')[['Intensiteit']].reset_index()
+summs25m=summsm[summsm['perstart'].dt.year.isin([2025])]
+summs25m
+show_numbers(summs25m,'Intensiteit',1,
+             'Werkdagen 2025 16:00-18:00 hrs','htnmeetptovarm',pltparahtn)
 
 nacorona=pd.to_datetime("2021-06-01")
 htncordtanc = htncordta[ (htncordta['perstart'] > nacorona) ]
@@ -302,6 +408,7 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 #vergelijking tellussen VRI; ook autogebruik binnen gemeente
 # -
 
-
+xlshtns2list= (glob.glob("../data/intensiteit-snelheid-htn-20?[57]-s2.xlsx"))
+xlshtns2list
 
 

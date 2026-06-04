@@ -142,9 +142,9 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
 some_string="""ID	stroom	hm	ri	afop	estfrID	IDsinds
 GEO1A_A_RWS_359819	a27	681	l	op		2018-11-23
-GEO1A_A_RWS_359850	a27	680	r	op		2019-01-03
+GEO1A_A_RWS_359850	a27	680	r	op		2019-03-01
 GEO1A_A_RWS_359853	a27	681	l	af		2018-11-23
-EST1A_A_EST_359850	a27	680	r	af	GEO1A_A_RWS_359819
+EST1A_A_EST_359850	a27	680	r	af	GEO1A_A_RWS_359819	2018-11-23
 RWS01_MONIBAS_0270vwa0678ra	a27d	678	r	d
 RWS01_MONIBAS_0271hrl0675ra	a27	675	l	t
 RWS01_MONIBAS_0271hrl0681ra	a27	681	l	d
@@ -159,142 +159,33 @@ RWS01_MONIBAS_0271hrl0695ra	a27	695	l	t
 RWS01_MONIBAS_0271hrr0697ra	a27	697	r	t"""
 #read CSV string into pandas DataFrame
 a27id_config= pd.read_csv(io.StringIO(some_string), sep="\t")
-display(a27id_config)
-def merge_initest(df,cfg):
+def merge_initest(df,cfg,addestrecs=True):
+    cfg['IDsinds']=cfg['IDsinds'].mask(pd.isna(cfg['IDsinds']),"2000-01-01")
+    cfg['IDsinds']=cfg['IDsinds'].mask(cfg['IDsinds']=="","2000-01-01")
+    cfg['IDsinds']=pd.to_datetime(cfg['IDsinds'],format="%Y-%m-%d")
+    rv=df.merge(cfg,how='left')    
     estrecm = cfg[cfg['ID'].str[0:3] == 'EST'].copy().rename(columns={'ID':'estID','estfrID':'ID'})
-    estv=df.merge(estrecm,how='right').rename(columns={'ID':'estfrID','estID':'ID'})
+    if addestrecs & (len(estrecm)>0):
+        estv=df.merge(estrecm,how='right').rename(columns={'ID':'estfrID','estID':'ID'})
+        rv=pd.concat([rv,estv])
     #hier staan evenveel waarden als het originieel, met een schatting van het totaal
     #print(estv)
-    rv=df.merge(cfg,how='left')    
-    return pd.concat([rv,estv])
+    return rv
 a27dta=merge_initest(idfh,a27id_config)
+display(a27id_config)
 # -
+
+calendafter=a27id_config['IDsinds'].max()
 
 #to get ID list:
 if (not suprtests):
     print(a27id_config[['ID']].to_csv(index=False))
 
-
 # +
 #a27dta.dtypes
-
-# +
-#old experiments
-
-# +
-def summstr_old(strdf,strval,ccol,split1,split2):
-    strdf= strdf[strdf['stroom']==strval].copy()
-    strdf['isign'] =strdf['ri'].map( {'r':1,'l':-1 }) 
-    strdf['iafop'] =strdf['afop'].map({'op':1,'af':-1,'t':0,'d':0}) 
-    strdf['Ilow'] = np.where(strdf['iafop'],strdf['isign'] ==strdf['iafop'] ,1) * strdf[ccol]
-    strdf['Ihigh'] = np.where(strdf['iafop'],strdf['isign'] == -strdf['iafop'] ,1) * strdf[ccol]    
-    grps=split1+['stroom','ri','hm']+split2
-    summs = strdf.groupby(grps).agg('sum')[['isign','iafop','Ilow','Ihigh']].reset_index()
-    grpsexhm=split1+['stroom','ri']
-    summs['cmpdiff'] = np.where(summs['isign'] >0 ,
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['Ihigh']- summs['Ilow'],
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['Ilow']- summs['Ihigh'])        
-    summs['hmstr']=summs['hm'].astype(str)+" "
-    summs['cmpvak'] = np.where(summs['isign'] >0 ,
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['hmstr']+'-'+ summs['hmstr'],
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['hmstr']+'-'+ summs['hmstr'])
-    return summs
-    
-summstr_old(a27dta,'a27','Intensiteit',[],['afop','ID'])    
-#summstr(a27dta,'a27','Intensiteit',[],[])    
-
-# +
-def crossmerge(self,f2):
-#    return f1.merge(f2,how='cross')
-    tk='_tmpkey'
-    return self.assign(key=1).merge(f2.assign(key=1), how='outer', on='key').drop(columns=['key'])
-
-#conventie: vaknaam is stroom + ri + hm, waarbij hm de laagste waarde van het vak is
-#daardoor de laatste vakken op 0 zetten
-def summstr(strdf,strval,ccol,split1):
-    strdf= strdf[strdf['stroom']==strval].copy()
-    grpsexhm=split1+['stroom','ri']
-    ccnorm=ccol+"_norm"
-#    strdft= strdf[strdf['afop']=='t']
-#    perlst = strdft.groupby(grpsexhm).agg('mean')[[ccol]].reset_index().rename (
-#        columns={ccol: 'tavg'})
-#    print(perlst)
-    
-    strdf['iafop'] =strdf['afop'].map({'op':1,'af':-1,'t': 0 ,'d': 0 }) 
-    vaklst = strdf.groupby(grpsexhm+['hm']).agg('sum')[[ccol]].reset_index().rename (
-        columns={ccol: ccnorm})
-    vaklst['hmi'] = vaklst.groupby(grpsexhm).shift(-1,fill_value=0)['hm']
-    vaklst['hmi2'] = vaklst.groupby(grpsexhm).shift(1,fill_value=0)['hm']
-    vaklst['isign'] =vaklst['ri'].map( {'r':1,'l':-1 }) 
-    some_string="""dtag
-1
--1"""
-    hwmerge= pd.read_csv(io.StringIO(some_string), sep="\t")
-    #iafop moet 1 zijn
-    #display (vaklst)
-    strdf1= crossmerge(strdf.merge(vaklst,how='left'),hwmerge)
-#    strdf2=strdf1.copy(deep=True)
-    #display (strdf)
-    #eerst voor de tellers met laagste hms   
-    strdf1['vak']   =np.where(strdf1['dtag'] <0, strdf1['hm'],strdf1['hmi'] )
-    strdf1['idoor'] =(strdf1['iafop'] ==0) *strdf1['dtag'] *strdf1['isign'] 
-    strdf1['isecb'] =strdf1['idoor'] +strdf1['iafop']*(  strdf1['iafop']== strdf1['dtag'] *strdf1['isign']  )  
-    strdf1['isecm'] =np.where(strdf1['dtag'] <0, strdf1['hmi2'],strdf1['hmi'] )!=0
-    toopt= strdf1
-    #toopt['iafop'] = np.where ( toopt['hmi']!=0, toopt['iafop'] ,0).astype(int)
-    toopt[ccol] = toopt[ccol] *toopt['isecb'] *strdf1['isecm']
-    return toopt
-
-
-optd=summstr(a27dta,'a27','Intensiteit',['uur']) .sort_values(['stroom','ri','vak','hm']) 
-optd[optd['uur']==12][['Intensiteit','stroom','ri','vak','hm','hmi','hmi2','dtag','ID','idoor','iafop','isecb','Intensiteit']]
-#summstr(a27dta,'a27','Intensiteit',[],[])    
-
-# +
-#print(optd.dtypes)
-def matchpervak(strdf,strval,ccol,split1):
-    optdl=summstr(strdf,strval,ccol,split1)
-    optdl['nvar']=1
-    matchgrps=split1+['stroom','ri','vak']
-    inisum=optdl.groupby(split1+['stroom','ri','vak']).agg('sum')[['Intensiteit']]
-    #display(inisum)
-    fitdatin=optdl.pivot_table(values=ccol, index=matchgrps, columns='ID', aggfunc='sum', fill_value=0)
-    yvars=fitdatin.columns.to_list()
-    display(yvars)
-    fitdatin= fitdatin.reset_index()
-    fitdatin['target']=0
-    vak0sli=fitdatin['vak']==0
-    np.sum(np.abs(fitdatin[yvars]),axis=1)
-    fitdatin.loc[vak0sli,yvars]=1
-    fitdatin.loc[vak0sli,'target']=np.sum(fitdatin.loc[vak0sli,yvars],axis=1)
-    fit1=nnls(fitdatin[yvars],fitdatin['target'])
-    rv=pd.DataFrame(fit1[0],index=yvars).T  
-    diff= np.sum(np.array(fitdatin[yvars]),axis=1).astype(float)
-    fitdatin['orig']=diff.T
-    diff= np.sum(np.array(rv)*np.array(fitdatin[yvars]),axis=1).astype(float)
-    fitdatin['result']=diff.T
-    if (not suprtests):
-        display(fitdatin)
-    #mism=rv * fitdatin['target']
-    if (not suprtests):
-        display(rv)
-    return fitdatin
-    
-optd=matchpervak(a27dta,'a27','Intensiteit',[]) 
 # -
 
-optd['dirhr']=  optd['stroom'] + optd['ri'] #+ (optdu['vak'].astype(str))
-sns.lineplot(data=optd[optd['vak'] !=0],x="vak",y="orig",label='Ilow',hue="ri")
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-optdu=matchpervak(a27dta,'a27','Intensiteit',['uur'])
-
-optdu['dirhr']=  optdu['stroom'] + optdu['ri'] + (optdu['vak'].astype(str))
-sns.lineplot(data=optdu[optdu['vak'] !=0],x="uur",y="orig",label='Ilow',hue="dirhr")
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-# +
-#end of old experiments
 
 # +
 iafopmap={'op':1,'af':-1,'t':0,'d':0}
@@ -305,7 +196,8 @@ def cumsumavg0(ser):
 
 #split2 is subest vab ['afop','ID']: alleen voor debugging gebruiken
 def summstr_normprep(strdfi,strval,ccol,split1,split2):
-    strdfr= strdfi[strdfi['stroom']==strval].copy()
+    nabefore=strdfi['IDsinds'].max()
+    strdfr= strdfi[(strdfi['stroom']==strval) & (strdfi['perstart']>nabefore)].copy()
     #sommeer over periodes etc, maar niet over IDS
     agrps=['stroom','ri','hm']
     grps=split1+agrps
@@ -403,13 +295,14 @@ dlowhiaxplt(cdata27,'a27','IntensiteitCorr',['uur'])
 
 dlowhiaxplt(cdata27,'a27','Intensiteit',['uur'])      
 
+
 # +
 #cdata27.dtypes
 # -
 
-calendafter=pd.to_datetime("2019-03-01")
 #nu de EST_xx IDs
-def estcol(strdfi,strval,nabefore,ccol,ccol2):
+def estcol(strdfi,strval,ccol,ccol2):
+    nabefore=strdfi['IDsinds'].max()
     split0=['perstart','perend']
     split1=split0+['uur']
 #    strdfs= strdfi[strdfi['perstart']>nabefore]
@@ -423,12 +316,12 @@ def estcol(strdfi,strval,nabefore,ccol,ccol2):
     factse=factse[split1+['ID',"cmpdiffsec"]]
     display(factsechk)    
     udf= strdfi.merge(factse,how='left')
-    udf[ccol2] = udf[ccol]+np.where(np.isnan(udf['cmpdiffsec']),0,
-                     np.where(udf['perstart']>nabefore, udf['cmpdiffsec'],np.nan)  )         
+    udf[ccol2] = np.where(udf['perstart']<=nabefore,np.nan,
+                          udf[ccol]+np.where(np.isnan(udf['cmpdiffsec']),0, udf['cmpdiffsec'])  )         
 #    display(udf[docorr==0])
     rv=udf.drop(['cmpdiffsec'],axis=1)
     return rv
-edata27=estcol(cdata27,'a27',calendafter,'IntensiteitCorr','IntensiteitEst') 
+edata27=estcol(cdata27,'a27','IntensiteitCorr','IntensiteitEst') 
 #edata27.sum()
 
 dlowhiaxplt(edata27,'a27','IntensiteitCorr',['uur'])  
@@ -436,30 +329,17 @@ dlowhiaxplt(edata27,'a27','IntensiteitCorr',['uur'])
 dlowhiaxplt(edata27,'a27','IntensiteitEst',['uur'])  
 
 
-def plttimesest(dfin):
+def plttimesest3c(dfin):
     dfplt=dfin[dfin['ID'].str[0:3] == 'EST']
-    sns.lineplot(data=dfplt,x='uur',y='Intensiteit',label='Tegenrichting')
-    sns.lineplot(data=dfplt,x='uur',y='IntensiteitCorr',label='TegenrichtingCorr')
-    sns.lineplot(data=dfplt,x='uur',y='IntensiteitEst',label='IntensiteitEst')
-plttimesest(edata27)    
+    sns.lineplot(data=dfplt,x='uur',y='Intensiteit',label='Tegenrichting',alpha=0.6)
+    sns.lineplot(data=dfplt,x='uur',y='IntensiteitCorr',label='TegenrichtingCorr',alpha=0.6)
+    sns.lineplot(data=dfplt,x='uur',y='IntensiteitEst',label='IntensiteitEst',alpha=0.6)
+plttimesest3c(edata27)    
 
 
 
 # +
-#nu houten IO
-# -
-
-xlslist= (glob.glob("../data/intensiteit-snelheid-*.xlsx"))
-xlslist
-
-allsumf1= [ ndw_od_read_overzicht(t,t,"datadatalog") for t in xlslist ]
-allsumdf = pd.concat(allsumf1)
-allsumdf
-
-allsumdf.to_excel("../intermediate/xlscatalog.xlsx")
-
-# +
-#a27 data sevral years
+#a27 data several years
 # -
 
 xlsa27s2list= (glob.glob("../data/intensiteit-snelheid-a27-20??-s2.xlsx"))
@@ -478,20 +358,33 @@ usefacts1my=summstr_normprep(rdata27my[rdata27my["perend"]>calendafter],
 cdata27my=corrcol(rdata27my,'a27','Intensiteit',usefacts1my,'IntensiteitCorr')  
 ilowhihmplt(cdata27my,'a27','IntensiteitCorr',['perstart'])              
 
-edata27my=estcol(cdata27my,'a27',calendafter,'IntensiteitCorr','IntensiteitEst') 
+edata27my=estcol(cdata27my,'a27','IntensiteitCorr','IntensiteitEst') 
 #edata27.sum()
 
 ilowhihmplt(edata27my,'a27','IntensiteitEst',['perstart']) 
 
 
-def plttimesest(dfin,col):
+def plttimesestmy(dfin,col):
     dfplt=dfin[dfin['ID'].str[0:3] == 'EST']
     sns.lineplot(data=dfplt,x='uur',y=col,hue='perstart')
-plttimesest(edata27my,'Intensiteit')  
+plttimesestmy(edata27my,'Intensiteit')  
 
-plttimesest(edata27my,'IntensiteitEst')  
+plttimesestmy(edata27my,'IntensiteitEst')  
+
+edata27myd = edata27my.copy();
+edata27myd['IntensiteitEstDiff'] = edata27myd['IntensiteitEst']  - edata27myd['Intensiteit'] 
+plttimesestmy(edata27myd,'IntensiteitEstDiff')  
+
+
+def plttimeshmmy(dfin,hmval,col):
+    fig, ax = plt.subplots()
+    dfplt=dfin[dfin['hm'] == hmval]
+    sns.lineplot(data=dfplt,x='perstart',y=col,hue='uur',style='ID',alpha=0.6,ax=ax)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plttimeshmmy(edata27my[edata27my['uur'].isin([14,15,16])],680,'IntensiteitEst') 
 
 edata27my.dtypes
+
 
 
 # +
@@ -534,7 +427,7 @@ pltjaaropaf(edata27my,'a27','IntensiteitEst',[680,681],_scaledr27, _scaledrinv27
 xlsa12s1list= (glob.glob("../data/intensiteit-snelheid-a12-20??-s1.xlsx"))
 xlsa12s1list
 
-testfil12=xlsa12s1list[0]
+testfil12=xlsa12s1list[1]
 
 idfa12=ndw_od_read_overzicht_en_intensiteiten(testfil12,"testseq12","testcoll20260522")
 #display(idfa12)
@@ -575,32 +468,4 @@ display(a12id_config)
 rdata12my=merge_initest(idfa12my,a12id_config)
 # -
 
-summstr_normprep(rdata12my,'a12','Intensiteit',[],['ID'])    
-
-ilowhihmplt(rdata12my,'a12','Intensiteit',['perstart'])    
-
-# +
-
-#rdata27my
-usefacts12my=summstr_normprep(rdata12my,
-                             'a12','Intensiteit',[],[]).reset_index()    
-#display(usefacts12my)
-cdata12my=corrcol(rdata12my,'a12','Intensiteit',usefacts12my,'IntensiteitCorr')  
-ilowhihmplt(cdata12my,'a12','IntensiteitCorr',['perstart'])   
-# -
-
-dlowhiaxplt(cdata12my,'a12','IntensiteitCorr',['uur'])  
-
-
-def _scaledr12(x):
-            return x *0.05
-def _scaledrinv12(x):
-            return x * 20
-pltjaaropaf(cdata12my,'a12','IntensiteitCorr',[658,662],_scaledr12, _scaledrinv12,
-            "A12 afrit Houten Oost opaf en door/4 :  l: westwaarts, r : oostwaards" )
-
-
-
-
-
-
+print("Klaar")
