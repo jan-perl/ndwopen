@@ -94,9 +94,11 @@ if (not suprtests):
     figname = "../output/htnmeetptov.png";
     fig.savefig(figname,dpi=300)
 
+targgem =321
+targgemcode = 'GM%04.0f'%targgem
 
-
-allgem_CBSsum=pd.read_pickle ("../data/gem1sum_GM0321.pkl")
+allgem_CBSsum=pd.read_pickle ("../data/gem1sum_"+targgemcode+".pkl")
+summ1gemdata =pd.read_pickle ("../data/gem1odin_"+targgemcode+".pkl")
 
 # +
 plot_crs=3857
@@ -410,5 +412,45 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
 xlshtns2list= (glob.glob("../data/intensiteit-snelheid-htn-20?[57]-s2.xlsx"))
 xlshtns2list
+
+
+
+summ1gemdatawerkd= summ1gemdata[summ1gemdata['Weekdag'].isin([2,3,4,5,6])]
+
+# +
+rscalea={'in':1/365,'uit':1/365, 'binnen': 1/365, 'buiten' : 20000000 / 18000000000/365}
+def pltjr4gra(dat,xfield,field,txt,rscale,normfactorV):
+    fieldexpl= {"FactorVActive":{False:"aantal loop+fiets (buiten rel)",True:"deel loop+fiets"},
+                "FactorV":{False:"aantal ritten (buiten rel)",True:"een"},
+                "FactorKm":{False:"totale reisafstand (km) (buiten rel)",True:"gemiddelde afstand (km)"}
+               }
+    #['VertGem','AankGem','WoGem']
+    gemfield=min(dat['VertGem'])
+    addfv=[] if (field=='FactorV') or not normfactorV else ['FactorV']
+    inuittot=dat.groupby(['verplricht',xfield])[[field]+addfv].agg('sum').reset_index()
+    
+    if normfactorV:
+        inuittot['FactorVs'] = inuittot[field] / inuittot['FactorV'] 
+    else:
+        inuittot['FactorVs'] = inuittot[field] * (inuittot['verplricht'].map(rscale)) 
+    #display(inuittot)
+    inuittot['richting'] = inuittot['verplricht'] + " " + ("%.0f" %gemfield)
+    p=sns.lineplot(data=inuittot,x=xfield,y='FactorVs',hue='richting')
+    if normfactorV & (field =="FactorVActive"):
+        p.set_ylim(bottom=0,top=1)
+    else:
+        p.set_ylim(bottom=0)
+    ylab=fieldexpl[field][normfactorV]
+    p.set_ylabel(ylab)     
+    p.set_title(txt)
+
+pltjr4gra(summ1gemdatawerkd,"Jaar",'FactorVActive',
+          'ODIN aantal verplaatsingen actieve modes werkdagen',rscalea,False)  
+# -
+
+rscalew={'in':1/(5*52),'uit':1/(5*52), 'binnen': 1/(5*52), 'buiten' : 20000000 / 18000000000/365}
+#auto bestuurders
+pltjr4gra(summ1gemdatawerkd[summ1gemdatawerkd['KHvm']==1],'Jaar','FactorV',
+         'ODIN: aantal verplaatsingen als auto bestuurder per werkdag',     rscalew,False)
 
 

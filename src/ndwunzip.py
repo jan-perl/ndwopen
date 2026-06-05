@@ -27,6 +27,8 @@ import os
 
 os.system('cd ../data/zipin; for t in *.zip ; do unzip $t; mv *.xlsx ../$(echo $t| sed -e "s+.zip$++").xlsx ; done')
 
+os.system('cp -p -u ../../ODINmod01/intermediate/gem1*_GM*.pkl ../data')
+
 os.system('ls -ltrac ../data')
 
 

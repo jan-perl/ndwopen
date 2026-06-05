@@ -195,9 +195,10 @@ def cumsumavg0(ser):
     return  st
 
 #split2 is subest vab ['afop','ID']: alleen voor debugging gebruiken
+#berekent CorrDoor factoren op basis van data na nabefore
 def summstr_normprep(strdfi,strval,ccol,split1,split2):
     nabefore=strdfi['IDsinds'].max()
-    strdfr= strdfi[(strdfi['stroom']==strval) & (strdfi['perstart']>nabefore)].copy()
+    strdfr= strdfi[(strdfi['stroom']==strval) & (strdfi['perend']>nabefore)].copy()
     #sommeer over periodes etc, maar niet over IDS
     agrps=['stroom','ri','hm']
     grps=split1+agrps
@@ -211,14 +212,14 @@ def summstr_normprep(strdfi,strval,ccol,split1,split2):
     #nu per hm/ri
     grpsexhm=split1+['stroom','ri']    
     summs['cmpdiff'] = np.where(summs['isign'] >0 ,
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['Ihigh']- summs['Ilow'],
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['Ilow']- summs['Ihigh'])
+           summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['Ihigh']- summs['Ilow'],
+           summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['Ilow']- summs['Ihigh'])
     summs['cmpdiff'].fillna(0.0,inplace=True)     
     #vaklabels
     summs['hmstr']=summs['hm'].astype(str)+" "
     summs['cmpvak'] = np.where(summs['isign'] >0 ,
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['hmstr']+'-'+ summs['hmstr'],
-                                summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['hmstr']+'-'+ summs['hmstr'])    
+           summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['hmstr']+'-'+ summs['hmstr'],
+           summs.groupby(grpsexhm).shift(1,fill_value=np.nan)['hmstr']+'-'+ summs['hmstr'])    
 #    summs['tocorr'] =summs.groupby(grpsexhm)['cmpdiff'].cumsum()
     summs['CorrDoor'] =summs.groupby(grpsexhm)['cmpdiff'].transform(cumsumavg0)
 #    print (summs['tocorr'].sum() )
@@ -244,6 +245,7 @@ ilowhihmplt(a27dta,'a27','Intensiteit',['perstart'])
 
 
 # +
+#maak een nieuwe kolom aan waarbij de meetdata DOORgaande stromen gecorrigeerd zijn voor CorrDoor
 def corrcol(strdfi,strval,ccol,facts,ccol2):
     factscols=['stroom','ri','hm','CorrDoor']
     udf= strdfi.merge(facts[factscols],how='left')
@@ -306,7 +308,8 @@ def estcol(strdfi,strval,ccol,ccol2):
     split0=['perstart','perend']
     split1=split0+['uur']
 #    strdfs= strdfi[strdfi['perstart']>nabefore]
-    strdfs= strdfi[strdfi['perstart']>nabefore]
+#    strdfs= strdfi[strdfi['perend']>nabefore]
+    strdfs= strdfi
     factsag=summstr_normprep(strdfs,strval,ccol,split1,[]).reset_index()    
     agrps=['stroom','ri','hm']
     factsagsel=factsag[split1+agrps+["cmpdiff"]].rename(columns={"cmpdiff":"cmpdiffsec"})
@@ -316,7 +319,7 @@ def estcol(strdfi,strval,ccol,ccol2):
     factse=factse[split1+['ID',"cmpdiffsec"]]
     display(factsechk)    
     udf= strdfi.merge(factse,how='left')
-    udf[ccol2] = np.where(udf['perstart']<=nabefore,np.nan,
+    udf[ccol2] = np.where(udf['perend']<=nabefore,np.nan,
                           udf[ccol]+np.where(np.isnan(udf['cmpdiffsec']),0, udf['cmpdiffsec'])  )         
 #    display(udf[docorr==0])
     rv=udf.drop(['cmpdiffsec'],axis=1)
@@ -359,7 +362,7 @@ cdata27my=corrcol(rdata27my,'a27','Intensiteit',usefacts1my,'IntensiteitCorr')
 ilowhihmplt(cdata27my,'a27','IntensiteitCorr',['perstart'])              
 
 edata27my=estcol(cdata27my,'a27','IntensiteitCorr','IntensiteitEst') 
-#edata27.sum()
+edata27my.groupby(['perstart'])[['Intensiteit','IntensiteitCorr','IntensiteitEst']].agg('sum')
 
 ilowhihmplt(edata27my,'a27','IntensiteitEst',['perstart']) 
 
