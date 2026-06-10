@@ -112,7 +112,7 @@ display(a12id_config)
 rdata12my=ndwimport.merge_initest(idfa12my,a12id_config)
 # -
 
-ndwimport.summstr_normprep(rdata12my,'a12','Intensiteit',[],['ID'])    
+ndwimport.summstr_normprep(rdata12my,'a12','Intensiteit',[],['ID'],False)    
 
 ndwimport.ilowhihmplt(rdata12my,'a12','Intensiteit',['perstart'])    
 
@@ -120,13 +120,13 @@ ndwimport.ilowhihmplt(rdata12my,'a12','Intensiteit',['perstart'])
 
 #rdata27my
 usefacts12my=ndwimport.summstr_normprep(rdata12my,
-                             'a12','Intensiteit',[],[]).reset_index()    
+                             'a12','Intensiteit',[],[],False).reset_index()    
 #display(usefacts12my)
 cdata12my=ndwimport.corrcol(rdata12my,'a12','Intensiteit',usefacts12my,'IntensiteitCorr')  
 ndwimport.ilowhihmplt(cdata12my,'a12','IntensiteitCorr',['perstart'])   
 # -
 
-ndwimport.dlowhiaxplt(cdata12my,'a12','IntensiteitCorr',['uur'])  
+ndwimport.dlowhiaxplt(cdata12my,'a12','IntensiteitCorr',['uur'],False,True)  
 
 
 def _scaledr12(x):
@@ -171,11 +171,11 @@ htn25put_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 rdathtn25s2=ndwimport.merge_initest(idfhtn25s2,htn25put_config)
 # -
 
-ndwimport.summstr_normprep(rdathtn25s2,'n409','Intensiteit',[],['ID'])    
+ndwimport.summstr_normprep(rdathtn25s2,'n409','Intensiteit',[],['ID'],False)    
 
 ndwimport.ilowhihmplt(rdathtn25s2,'n409','Intensiteit',['perstart'])   
 
-ndwimport.dlowhiaxplt(rdathtn25s2,'n409','Intensiteit',['uur'])   
+ndwimport.dlowhiaxplt(rdathtn25s2,'n409','Intensiteit',['uur'],False,True)   
 
 ndwimport.ilowhihmplt(rdathtn25s2,'n410','Intensiteit',['perstart'])   
 
@@ -254,7 +254,7 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 sns.lineplot(data=sel3let(rdata12bnk,'GEO'),x="uur",y="Intensiteit",hue="lbl",style="afop")
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-ndwimport.summstr_normprep(rdata12bnk,'a12','Intensiteit',[],['ID']) 
+ndwimport.summstr_normprep(rdata12bnk,'a12','Intensiteit',[],['ID'],False) 
 
 ndwimport.ilowhihmplt(rdata12bnk,'a12','Intensiteit',['perstart'])    
 
@@ -264,7 +264,7 @@ rdathtn25s2=rdathtn25s2[rdathtn25s2['perstart'].dt.year.isin([2025]) ]
 #display(rdata12y25)
 rdatnodijk= pd.concat([rdata12bnki,rdathtn25s2])
 
-ndwimport.summstr_normprep(rdatnodijk,'n410','Intensiteit',[],['ID'])  
+ndwimport.summstr_normprep(rdatnodijk,'n410','Intensiteit',[],['ID'],False)  
 
 ndwimport.ilowhihmplt(rdatnodijk,'n410','Intensiteit',['perstart'])  
 

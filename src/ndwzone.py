@@ -149,11 +149,11 @@ rdata27hmy=ndwimport.merge_initest(idfhtnmyc,ndwimport.a27id_config)
 #rdata27my
 
 #nee dat lukt niet, GEO1A_A_RWS_359850 mist in s2
-ndwimport.summstr_normprep(rdata27hmy[rdata27hmy["perend"]>ndwimport.calendafter],
-                             'a27','Intensiteit',[],['ID']).reset_index()   
+ndwimport.summstr_normprep(rdata27hmy[rdata27hmy["perend"]>ndwimport.calendafter(rdata27hmy)],
+                             'a27','Intensiteit',[],['ID'],False).reset_index()   
 
-usefactsa27hmy=ndwimport.summstr_normprep(rdata27hmy[rdata27hmy["perend"]>ndwimport.calendafter],
-                             'a27','Intensiteit',[],[]).reset_index()    
+usefactsa27hmy=ndwimport.summstr_normprep(rdata27hmy[rdata27hmy["perend"]>ndwimport.calendafter(rdata27hmy)],
+                             'a27','Intensiteit',[],[],False).reset_index()    
 if (not suprtests):
     display(usefactsa27hmy)
 cdata27hmy=ndwimport.corrcol(rdata27hmy,'a27','Intensiteit',usefactsa27hmy,'IntensiteitCorr')  
@@ -181,7 +181,7 @@ def addestasraw(measdf,estdf,nabefore,ccol,addlids):
     rv2=pd.concat([measdf,gdf])
     rv=rv2[rv2["perend"]>nabefore]
     return rv
-idfhtnemyB= addestasraw(idfhtnmy,ndwimport.edata27my,ndwimport.calendafter,'Intensiteit',['GEO1A_A_RWS_359850'])
+idfhtnemyB= addestasraw(idfhtnmy,ndwimport.edata27my,ndwimport.calendafter(ndwimport.edata27my),'Intensiteit',['GEO1A_A_RWS_359850'])
 #idfhtnemy
 
 #now compare results
@@ -190,8 +190,11 @@ def cmprawests(df1,df2r,ccol):
     estdf2=df2r[(df2r['ID'].str[0:3] == 'EST') ]
     jfields=['ID','perstart','uur']
     estj=estdf1[jfields + [ccol+'Est']] .merge(estdf2[jfields + [ ccol]])
-    sns.scatterplot(data=estj,x=ccol,y=ccol+'Est')
-    sns.lineplot(data=estj,x=ccol,y=ccol)
+    estj['EstDiff'] = estj[ccol]- estj[ccol+'Est'] 
+    p=sns.scatterplot(data=estj,x=ccol,y='EstDiff',hue='perstart')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    p.set_ylabel('schatting beperkt aantal punten Htn - schatting full a27')
+    p.set_xlabel('schatting full a27')
     return estj                                                
 cmprawests(edata27hmy, idfhtnemyB,'Intensiteit').sum()
 
@@ -204,9 +207,40 @@ def renameestfields(measdf,estdf,nabefore,ccol):
     rv2=estdfrecs[measdf.columns].copy(deep=True)    
     rv=rv2[rv2["perend"]>nabefore]
     return rv
-idfhtnemyA=  renameestfields(idfhtnmy,edata27hmy,ndwimport.calendafter,'Intensiteit')
+idfhtnemyA=  renameestfields(idfhtnmy,edata27hmy,ndwimport.calendafter(edata27hmy),'Intensiteit')
 
-idfhtnemy=idfhtnemyA
+# +
+#methode C: gebruik edata27mycln alsof het ruwe data is
+# -
+
+#print (edata27mycln.columns)
+rd1=idfhtnmy [idfhtnmy ['perstart'].dt.year<=2099].groupby(["ID","perstart"])[["Intensiteit"]].sum().reset_index()
+rd2=rd1.pivot(index='ID', columns='perstart', values='Intensiteit')
+rd2
+
+edata27mycln = ndwimport.edata27mycln
+#print (edata27mycln.columns)
+rd1=edata27mycln [edata27mycln ['perstart'].dt.year<=2099].groupby(["ID","perstart"])[["Intensiteit"]].sum().reset_index()
+rd2=rd1.pivot(index='ID', columns='perstart', values='Intensiteit')
+rd2
+
+
+def combine_cleaned(dfhtn,dfpr):
+    newids=dfpr["ID"].unique()
+    print (newids)
+    minph=dfhtn['perstart'].min()
+    minpr=dfpr['perstart'].min()    
+    dfhkeep=dfhtn[(dfhtn["ID"].isin(newids)==False) & (dfhtn["perstart"]>= minpr) ]
+    dfpkeep=dfpr[(dfpr["perstart"]>= minph) ]
+    rv= pd.concat([dfhkeep,dfpkeep])
+    return rv
+idfhtnemyC=combine_cleaned(idfhtnmy,edata27mycln)
+
+# +
+#kies methode
+# -
+
+idfhtnemy=idfhtnemyC
 idfhtnemy.dtypes
 
 #houten data, oude versie
@@ -452,5 +486,10 @@ rscalew={'in':1/(5*52),'uit':1/(5*52), 'binnen': 1/(5*52), 'buiten' : 20000000 /
 #auto bestuurders
 pltjr4gra(summ1gemdatawerkd[summ1gemdatawerkd['KHvm']==1],'Jaar','FactorV',
          'ODIN: aantal verplaatsingen als auto bestuurder per werkdag',     rscalew,False)
+summsud = htncordta.groupby(['Zoneinuit','perstart'])['Intensiteit'].agg('sum').reset_index()
+summsud['Jaar']=summsud['perstart'].dt.year
+sns.lineplot(data=summsud,x='Jaar',y='Intensiteit',hue='Zoneinuit')
+plt.title("""Teldata lussen in/uit Houten vs ODIN aut bestuurder 2018-2022:
+    data werkdagen: ODIN sterker Corona effect""")
 
 
