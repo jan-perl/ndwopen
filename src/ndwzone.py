@@ -476,7 +476,7 @@ def pltjr4gra(dat,xfield,field,txt,rscale,normfactorV):
         inuittot['FactorVs'] = inuittot[field] * (inuittot['verplricht'].map(rscale)) 
     #display(inuittot)
     inuittot['richting'] = inuittot['verplricht'] + " " + ("%.0f" %gemfield)
-    p=sns.lineplot(data=inuittot,x=xfield,y='FactorVs',hue='richting')
+    p=sns.lineplot(data=inuittot,x=xfield,y='FactorVs',hue='richting',marker='o')
     if normfactorV & (field =="FactorVActive"):
         p.set_ylim(bottom=0,top=1)
     else:
@@ -503,7 +503,7 @@ def telvsodin(teldatainuit, ODINdta,xfield,jaarsel,tit,savf):
     teldatainuit['Jaar']=teldatainuit['perstart'].dt.year
     teldatainuit= teldatainuit[teldatainuit['Jaar'].isin(jaarsel) ]
     summsud = teldatainuit.groupby(['Zoneinuit',xfield])['Intensiteit'].agg('sum').reset_index()
-    p=sns.lineplot(data=summsud,x=xfield,y='Intensiteit',hue='Zoneinuit')
+    p=sns.lineplot(data=summsud,x=xfield,y='Intensiteit',hue='Zoneinuit',marker='x')
     p=pltjr4gra(datawerkd[datawerkd['KHvm']==1],xfield,'FactorV',
              'ODIN: aantal verplaatsingen als auto bestuurder per werkdag',     rscalew,False)
     p.set_title(tit)
@@ -511,7 +511,7 @@ def telvsodin(teldatainuit, ODINdta,xfield,jaarsel,tit,savf):
 telvsodin(htncordta, summ1gemdata,'Jaar',allyr,"""Teldata lussen in/uit Houten vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","htniuODINcmp")  
 
-yrboth=(2019,2021,2022)
+yrboth=(2018,2019,2021,2022)
 telvsodin(htncordta, summ1gemdata,'uur',
           yrboth,"""Teldata lussen in/uit Houten vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","htniuODINcmp") 
