@@ -65,7 +65,7 @@ allsumdf
 allsumdf.to_excel("../intermediate/xlscatalog.xlsx")
 
 # +
-#zelfde verhaal. A12 check
+#zelfde verhaal. A12 check over Houten Oost en Bunnik heen
 # -
 
 xlsa12s1list= (glob.glob("../data/intensiteit-snelheid-a12-20??-s1.xlsx"))
@@ -282,7 +282,8 @@ idfa12bijmy =[ ndwimport.ndw_od_read_overzicht_en_intensiteiten(testfil,"a12bijm
 idfa12bijmy=pd.concat(idfa12bijmy)
 
 if (not suprtests):
-    odf120= ndwimport.ndw_od_read_overzicht(a12bijlst[0],"testseq12","testcoll20260522")
+    odf120= ndwimport.ndw_od_read_overzicht(a12bijlst[0],"testseq120","testcoll20260522")
+    odf121= ndwimport.ndw_od_read_overzicht(a12bijlst[1],"testseq121","testcoll20260522")
     odf12=pd.concat([odf121,odf120])
     odf12=odf12[odf12["ID"].str[0:3] != "PUT"]
     pland= odf12.plot(alpha=0.4)
