@@ -118,6 +118,8 @@ if (not suprtests):
     fig, ax = plt.subplots()
     allgem_CBSsum.set_crs(crs="epsg:28992")
     pland=allgem_CBSsum.boundary.plot(color='green',alpha=0.1,ax=ax)
+    pland.set_ylim(bottom=441000,top=453000)
+    #pland.set_xlim(left=137000,right=149000)
     cx.add_basemap(pland, source= ndwimport.prov0,crs=plot_crs)
     pland= add_geodict(ndwimport.odf,gdc,ax,'yellow','overig a27')
     pland= add_geodict( odfbnk,gdc,ax,'grey','overig bnk')
@@ -285,10 +287,13 @@ summs = htncordta.groupby(['centrum','richting','Zoneinuit','ID','perstart','Plo
 summs25=summs[summs['perstart'].dt.year.isin([2025])]
 summs25
 
+
+
 # +
 plot_crs=3857
 plot_crs="epsg:28992"
 pltparahtn={'scleft':134000, 'scright':147000,
+            'sctop':453000, 'scbottom':441000,
             'minttxsp':1000,
             'geodx':namesptsx,'geody':namesptsy,
            'totalpos':[136000,443000]}
@@ -321,6 +326,7 @@ def show_numbers(summsi,ifield,ascale,tit,fn,pltpa):
         ax.annotate("",xytext=(ex,ey),xy=(lx, ly), 
                     arrowprops=dict(arrowstyle="<-"))
         ax.set_xlim(left=pltpa['scleft'], right=pltpa['scright'])
+        ax.set_ylim(top=pltpa['sctop'], bottom=pltpa['scbottom'])
         ft = f*max( abs(fs*1.1), pltpa['minttxsp']/lori  )
         (ext,eyt)=(lx-ldx*ft,ly-ldy*ft)
         ax.annotate("%5.0f"%(row[ifield]),xy=(ext,eyt),
@@ -520,7 +526,7 @@ telvsodin(htncordta, summ1gemdata,'uur',
 #wijk bij duurstede
 # -
 
-wijklst= (glob.glob("../data/intensiteit-snelheid-wijk-20??.xlsx"))
+wijklst= (glob.glob("../data/intensiteit-snelheid-wijk-20??-s2.xlsx"))
 wijklst
 
 idfwijkmy =[ ndwimport.ndw_od_read_overzicht_en_intensiteiten(testfil,"a12bijmy",testfil) for testfil in wijklst ]
@@ -550,10 +556,10 @@ if (not suprtests):
     #display(namespts)
 
 some_string="""ID	centrum	richting	Zoneinuit	estfrID	IDsinds	PlotPt	Drlov
-PUT01_PUVIS_N229.13_0_2	WijkbD	Odijk	in			PUT01_N229.19_0	PUT01_N229.19_0
-PUT01_PUVIS_N229.13_1_2	WijkbD	Odijk	uit			PUT01_N229.19_0	PUT01_N229.19_0
-PUT01_N227.11_0	WijkbD	Doorn	in			PUT01_N229.19_0	PUT01_N229.19_0
-PUT01_N227.11_1	WijkbD	Doorn	uit			PUT01_N229.19_0	PUT01_N229.19_0"""
+PUT01_PUVIS_N229.13_0_2	WijkbD	Odijk	in			PUT01_PUVIS_N229.13_0_2	PUT01_N229.19_0
+PUT01_PUVIS_N229.13_1_2	WijkbD	Odijk	uit			PUT01_PUVIS_N229.13_1_2	PUT01_N229.19_0
+PUT01_N227.11_0	WijkbD	Doorn	in			PUT01_N227.11_0	PUT01_N229.19_0
+PUT01_N227.11_1	WijkbD	Doorn	uit			PUT01_N227.11_1	PUT01_N229.19_0"""
 #read CSV string into pandas DataFrame
 wijkri_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 display(wijkri_config)
@@ -563,15 +569,46 @@ wijkcordta['Balans']=wijkcordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * wijkcor
 
 summsur= wijkcordta.groupby(['uur','richting','perstart']).agg('sum')[['Intensiteit']].reset_index()
 sns.lineplot(data=summsur,x='uur',y='Intensiteit',hue='richting',style='perstart')
-plt.title('''Totaal per uur en richting op werkdagen 
-2018-2025 ex corona''')
+plt.title('''Totaal per uur en richting op werkdagen 2018-2025''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+fig.savefig("../output/wijkrichttot.svg",dpi=300, bbox_inches='tight')
 
 summsur= wijkcordta.groupby(['uur','richting','perstart']).agg('sum')[['Balans']].reset_index()
 sns.lineplot(data=summsur,x='uur',y='Balans',hue='richting',style='perstart')
-plt.title('''Totaal per uur en richting op werkdagen 
-2018-2025 ex corona''')
+plt.title('''Balans per uur en richting op werkdagen 2018-2025''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+fig.savefig("../output/wijkrichtbal.svg",dpi=300, bbox_inches='tight')
+
+#    pland.set_ylim(bottom=435000,top=444000)
+#    pland.set_xlim(left=137000,right=149000)
+pltparawijk={'scleft':145000, 'scright':157000,
+            'scbottom':440000,'sctop':450000,
+            'minttxsp':1000,
+            'geodx':namesptsx,'geody':namesptsy,
+           'totalpos':[148000,443000]}
+summswijk = wijkcordta.groupby(['centrum','richting','Zoneinuit','ID','perstart','PlotPt','Drlov']).agg('sum')[['Intensiteit']].reset_index()
+summswijk25=summswijk[summswijk['perstart'].dt.year.isin([2025])]
+print(summswijk25)
+show_numbers(summswijk25,'Intensiteit',0.15,
+             'Werkdagen 2025 0-24 hrs','wijkmeetptovar',pltparawijk)
+
+
+def adduuriucat(df):
+    df['pendelcat'] = 'overig'
+    df['pendelcat'] = df['pendelcat'] .where(False== ((df['uur'].isin((5,6,7,8)) ) & (df['Zoneinuit']=="in")),'bezoekers')
+    df['pendelcat'] = df['pendelcat'] .where(False==( (df['uur'].isin((5,6,7,8)) ) & (df['Zoneinuit']=="uit")),'bewoners')
+    df['pendelcat'] = df['pendelcat'] .where(False== ((df['uur'].isin((15,16,17,18)) ) & (df['Zoneinuit']=="uit")),'bezoekers')
+    df['pendelcat'] = df['pendelcat'] .where(False==( (df['uur'].isin((15,16,17,18)) ) & (df['Zoneinuit']=="in")),'bewoners')
+    return df
+wijkcordtap= adduuriucat(wijkcordta)
+#wijkcordtap
+
+summsur= wijkcordtap.groupby(['pendelcat','perstart']).agg('sum')[['Intensiteit']].reset_index()
+p=sns.lineplot(data=summsur,x='perstart',y='Intensiteit',hue='pendelcat',marker='o')
+p.set_ylim(bottom=0)
+plt.title('''Pendel aantallen op werkdagen 2018-2025''')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+fig.savefig("../output/wijkpendtelcat.svg",dpi=300, bbox_inches='tight')
 
 telvsodin(wijkcordta, summ1gemdata,'Jaar',allyr,"""Teldata lussen in/uit Wijk bij Duurstede vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","cliuODINcmp")  
@@ -604,15 +641,20 @@ if (not suprtests):
     fig, ax = plt.subplots()
     allgem_CBSsum.set_crs(crs="epsg:28992")
     pland=allgem_CBSsum.boundary.plot(color='green',alpha=0.1,ax=ax)
+    pland.set_ylim(bottom=435000,top=444000)
+    pland.set_xlim(left=137000,right=149000)
+    ax.set_aspect(aspect=1.0)
     cx.add_basemap(pland, source= ndwimport.prov0,crs=plot_crs)
-    odfwijk= ndwimport.ndw_od_read_overzicht(wijklst[0],"testseq12","testcoll20260522")
-    pland= add_geodict(odfwijk,gdc,ax,'blue','meetpt')
+    odfwijk= ndwimport.ndw_od_read_overzicht(wijklst[1],"testseq12","testcoll20260522")
+#    print(odfwijk)
+    pland= add_geodict(odfwijk,gdc,ax,'blue','meetpt')    
 #    pland= add_geodict( odfbnk,gdc,ax,'grey','overig bnk')
 #    pland= add_geodict( ndwimport.odf12,gdc,ax,'red','overig a12')
     pland= add_geodict(  stationplccl,gdc,ax,'green','OV, pont')
 #    pland= add_geodict( odfhtn,gdc,ax,'blue','Gebruikt htn')
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    figname = "../output/wijkmeetptovgg.png";
+#    ax.set_aspect(aspect=1.0)
+    figname = "../output/clmeetptovgg.png";
     fig.savefig(figname,dpi=300)
     namesptsx=(pd.concat(gdc).copy().set_index('ID')['geometry'].x.to_dict())
     namesptsy=(pd.concat(gdc).copy().set_index('ID')['geometry'].y.to_dict())
@@ -638,17 +680,26 @@ plt.title('''Totaal per uur en richting op werkdagen
 2018-2025 ex corona''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
+fig, ax = plt.subplots()
 summsur= clcordta.groupby(['uur','richting','perstart']).agg('sum')[['Balans']].reset_index()
-sns.lineplot(data=summsur,x='uur',y='Balans',hue='richting',style='perstart')
-plt.title('''Totaal per uur en richting op werkdagen 
+sns.lineplot(ax=ax,data=summsur,x='uur',y='Balans',hue='richting',style='perstart')
+plt.title('''Balans per uur en richting op werkdagen 
 2018-2025 ex corona''')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+fig.savefig("../output/clrichtbal.svg",dpi=300, bbox_inches='tight')
 
-summsur= clcordta.groupby(['uur','richting','perstart']).agg('sum')[['Balans']].reset_index()
-sns.lineplot(data=summsur,x='uur',y='Balans',hue='richting',style='perstart')
-plt.title('''Totaal per uur en richting op werkdagen 
-2018-2025 ex corona''')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+#    pland.set_ylim(bottom=435000,top=444000)
+#    pland.set_xlim(left=137000,right=149000)
+pltparacl={'scleft':137000, 'scright':149000,
+            'scbottom':435000,'sctop':444000,
+            'minttxsp':1000,
+            'geodx':namesptsx,'geody':namesptsy,
+           'totalpos':[138000,441000]}
+summscl = clcordta.groupby(['centrum','richting','Zoneinuit','ID','perstart','PlotPt','Drlov']).agg('sum')[['Intensiteit']].reset_index()
+summscl25=summscl[summscl['perstart'].dt.year.isin([2025])]
+summscl25
+show_numbers(summscl25,'Intensiteit',0.15,
+             'Werkdagen 2025 0-24 hrs','clmeetptovar',pltparacl)
 
 telvsodin(clcordta, summ1gemdata,'Jaar',allyr,"""Teldata lussen in/uit Cl vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN hoger dan verkeerswegen""","cliuODINcmp")  
