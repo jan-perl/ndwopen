@@ -99,11 +99,11 @@ targgem =321
 
 def selgemyrs(targgem):
     targgemcode = 'GM%04.0f'%targgem
-    allgem_CBSsum=pd.read_pickle ("../intermediate/gemdata/gem1sum_"+targgemcode+".pkl")
+    targgem_CBSsum=pd.read_pickle ("../intermediate/gemdata/gem1sum_"+targgemcode+".pkl")
     ODindta =pd.read_pickle ("../intermediate/gemdata/gem1odin_"+targgemcode+".pkl")
-    rv =(allgem_CBSsum,ODindta)
+    rv =(targgem_CBSsum,ODindta)
     return rv
-(allgem_CBSsum,summ1gemdata)=selgemyrs(targgem)
+(allgem_CBSsum,summ1gemdatahtn)=selgemyrs(targgem)
 
 # +
 plot_crs=3857
@@ -441,7 +441,17 @@ sns.lineplot(data=summsur,x='perstart',y='Intensiteit',hue='richting',style='Zon
 plt.title('''Drukste uur werkdagen''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-
+ochturen=(5,6,7,8,9)
+miduren=(15,16,17,18,19)
+def adduuriucat(dfin):
+    df=dfin.copy()
+    df['pendelcat'] = 'buitensp'
+    df['pendelcat'] = df['pendelcat'] .where(False== ((df['uur'].isin(ochturen) ) & (df['Zoneinuit']=="in")),'bezoekersp')
+    df['pendelcat'] = df['pendelcat'] .where(False==( (df['uur'].isin(ochturen) ) & (df['Zoneinuit']=="uit")),'bewonersp')
+    df['pendelcat'] = df['pendelcat'] .where(False== ((df['uur'].isin(miduren) ) & (df['Zoneinuit']=="uit")),'bezoekersp')
+    df['pendelcat'] = df['pendelcat'] .where(False==( (df['uur'].isin(miduren) ) & (df['Zoneinuit']=="in")),'bewonersp')
+    return df
+htncordtap= adduuriucat( htncordta)
 
 # +
 #vergelijkingen
@@ -460,12 +470,17 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 xlshtns2list= (glob.glob("../data/intensiteit-snelheid-htn-20?[57]-s2.xlsx"))
 xlshtns2list
 
+# +
+#ODIN data
+# -
 
+summ1=summ1gemdatahtn.groupby(['Jaar','AankGem','Weekdag'])['FactorV'].agg('sum').reset_index()
+sns.lineplot(data=summ1,x='Jaar',y='FactorV',hue='Weekdag',style='AankGem', marker= 'o')
 
-summ1gemdatawerkd= summ1gemdata[summ1gemdata['Weekdag'].isin([2,3,4,5,6])]
+summ1gemdatawerkd= summ1gemdatahtn[summ1gemdatahtn['Weekdag'].isin([2,3,4,5,6])]
 
 # +
-rscalea={'in':1/365,'uit':1/365, 'binnen': 1/365, 'buiten' : 20000000 / 18000000000/365}
+rscalea={'in':7/5/365,'uit':7/5/365, 'binnen': 7/5/365, 'buiten' : 20000000*7/5 / 18000000000/365}
 def pltjr4gra(dat,xfield,field,txt,rscale,normfactorV):
     fieldexpl= {"FactorVActive":{False:"aantal loop+fiets (buiten rel)",True:"deel loop+fiets"},
                 "FactorV":{False:"aantal ritten (buiten rel)",True:"een"},
@@ -494,7 +509,111 @@ def pltjr4gra(dat,xfield,field,txt,rscale,normfactorV):
 
 pltjr4gra(summ1gemdatawerkd,"Jaar",'FactorVActive',
           'ODIN aantal verplaatsingen actieve modes werkdagen',rscalea,False)  
+
+# +
+#Verelijkingen ODiN
+
+# +
+lokaallabel='lokaal'
+def pendelcODIN(gemdat):
+    df= gemdat[(gemdat['Weekdag'].isin([2,3,4,5,6]) ) & (gemdat['verplricht'] !='buiten')].copy();
+    rscalea={'in':7/5/365,'uit':7/5/365, 'binnen': 7/5/365, 'buiten' : 20000000*7/5 / 18000000000/365}
+    gemfield=min(df['VertGem'])
+    df['Uur'] = df['AankUur']
+    df['Uur'] = df['Uur'] .where(False== (df['verplricht']=="uit"), df['VertUur'] )
+    df['pendelcat'] = 'buitensp'
+    df['pendelcat'] = df['pendelcat'] .where(False== ((df['AankUur'].isin(ochturen) ) & (df['verplricht']=="in")),'bezoekersp')
+    df['pendelcat'] = df['pendelcat'] .where(False==( (df['VertUur'].isin(ochturen) ) & (df['verplricht']=="uit")),'bewonersp')
+    df['pendelcat'] = df['pendelcat'] .where(False== ((df['VertUur'].isin(miduren) ) & (df['verplricht']=="uit")),'bezoekersp')
+    df['pendelcat'] = df['pendelcat'] .where(False==( (df['AankUur'].isin(miduren) ) & (df['verplricht']=="in")),'bewonersp')
+    df['pendelcat'] = df['pendelcat'] .where(False==( df['verplricht'].isin( ["binnen"]  )),lokaallabel)
+    df['pendelcat'] = df['pendelcat'] .where(False==( df['verplricht'].isin( ["buiten"]  )),"niet-gem" )
+    return df
+
+pc2htn=pendelcODIN(summ1gemdatahtn)   
+
+
+# +
+def datplotcumcatwo(dat, fieldsplit,valfield,mult):
+    dagg = dat.groupby (['pendelcat',fieldsplit] )[[valfield]].agg('sum')
+    dagg = dagg*mult
+    dagg= dagg.reset_index().sort_values(fieldsplit)
+    dagg[valfield]=dagg.groupby(['pendelcat'])[valfield].cumsum()
+    dagg[valfield] = dagg[valfield].where(dagg['pendelcat']  !=lokaallabel,0.5 * dagg[valfield])
+    dagg['opdeling'] =fieldsplit
+    return dagg
+    
+def modplotopdcatwo(fig,ax,dat, fieldsplit,title,valfield,jaarnorm):
+    mult=7/5/365;
+    if jaarnorm:
+        jaren=dat['Jaar'].unique()
+        mult /= len(jaren)
+    dagg=datplotcumcatwo(dat, fieldsplit,valfield,mult ) 
+    dagg=dagg.sort_values([fieldsplit,'pendelcat'],ascending=[True,True])
+    
+#    dagg['Jaar'] += dagg['opdeling'] .map(fieldsplit)
+
+    hues=dagg[fieldsplit].unique()
+#    print(hues[::-1])
+    sns.barplot(ax=ax,data=dagg,x='pendelcat', y= valfield , 
+                hue=fieldsplit,dodge=0,hue_order=hues[::-1])
+    leglabels= {'WoGem':'Woongemeente','KHvm_expl' : 'Hoofdvervoermiddel'}
+    ax.legend(title=leglabels[fieldsplit], bbox_to_anchor=(1.01, 0.95), loc=2, borderaxespad=0.,framealpha=0)
+    ax.set_title(title )
+    #return daggcum
+fig, axs = plt.subplots(1, 1)    
+modplotopdcatwo(fig,axs,pc2htn,'WoGem', 'Alle verplaatsingen per werkdag','FactorV',True)
+
+
+# +
+def ODINkeygrph(pc2,legloc,locabbr):
+    fig, axs = plt.subplots(2, 2,figsize=(12,12))
+    fig.subplots_adjust(hspace=0.3,wspace=0.4)
+    modplotopdcatwo(fig,axs[0,0],pc2,'WoGem', 'Alle verplaatsingen per werkdag '+legloc,'FactorV',True)
+    modplotopdcatwo(fig,axs[0,1],pc2,'KHvm_expl', 'Alle verplaatsingen per werkdag '+legloc,'FactorV',True)
+    modplotopdcatwo(fig,axs[1,0], pc2[pc2['KHvm']==1],'WoGem', 'Verplaatsingen Autobestuurders per werkdag '+legloc,'FactorV',True)
+    modplotopdcatwo(fig,axs[1,1], pc2[pc2['KHvm']==1],'WoGem', 'Kilometers Autobestuurders per werkdag '+legloc,'FactorKm',True)
+    fig.savefig("../output/"+locabbr+"_pendODINWOgem.svg",dpi=300, bbox_inches='tight')   
+    
+ODINkeygrph(pc2htn,"Houten","htn") 
+
+
 # -
+
+def ODINuurcheck(pc2,legloc,locabbr):
+    p2uur= pc2[(pc2['KHvm']==1) & (pc2['verplricht']!="binnen")].groupby (['pendelcat','WoGem','Uur'] )[['FactorV']].agg('sum').reset_index()
+    sns.lineplot(data=p2uur ,x='Uur', y='FactorV',hue='pendelcat',style='WoGem',marker= 'o')
+    plt.title('''Indeling controleren: bewoners/bezoekers sterk contrast op WoGem''')
+    plt.savefig("../output/"+locabbr+"_penduurchk.svg",dpi=300, bbox_inches='tight')   
+ODINuurcheck(pc2htn,"Houten","htn") 
+
+
+# +
+def jrODINpendel(pc2, fieldsplit,title,valfield,teldat,legloc,locabbr):
+    dat = pc2[(pc2['KHvm']==1) & (pc2['pendelcat'] !=lokaallabel)]
+    mult=7/5/365;
+    dagg= dat.groupby (['pendelcat',fieldsplit] )[[valfield]].agg('sum').reset_index()
+    dagg['pendeldata'] = dagg['pendelcat']
+    dagg['Intensiteit'] = dagg[valfield] *mult
+    dagg['bron']= 'enquetes'
+    summsur= teldat.groupby(['pendelcat','perstart']).agg('sum')[['Intensiteit']].reset_index()
+    summsur['bron']= 'tellingen'
+    summsur['pendeldata'] = 'tellingen '+summsur['pendelcat']
+    summsur['Jaar'] = summsur['perstart'].dt.year
+    cframe=pd.concat([dagg,summsur])
+#    print(cframe)
+    p=sns.lineplot(data=cframe,x='Jaar',y='Intensiteit',hue='pendelcat',style='bron',marker='o')
+    p.set_ylim(bottom=0)
+    plt.title('Pendel aantallen '+legloc+' per werkdag')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    fig.savefig("../output/"+locabbr+"_pendjrvg1.svg",dpi=300, bbox_inches='tight')    
+    
+jrODINpendel(pc2htn ,'Jaar', 'Autobestuurders','FactorV',htncordtap,"Houten","htn") 
+# -
+
+
+
+
 
 pltjr4gra(summ1gemdatawerkd,"VertUur",'FactorVActive',
           'ODIN aantal verplaatsingen actieve modes werkdagen',rscalea,False)  
@@ -514,11 +633,11 @@ def telvsodin(teldatainuit, ODINdta,xfield,jaarsel,tit,savf):
              'ODIN: aantal verplaatsingen als auto bestuurder per werkdag',     rscalew,False)
     p.set_title(tit)
     return p
-telvsodin(htncordta, summ1gemdata,'Jaar',allyr,"""Teldata lussen in/uit Houten vs ODIN aut bestuurder 2018-2022:
+telvsodin(htncordta, summ1gemdatahtn,'Jaar',allyr,"""Teldata lussen in/uit Houten vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","htniuODINcmp")  
 
-yrboth=(2018,2019,2021,2022)
-telvsodin(htncordta, summ1gemdata,'uur',
+yrboth=(2018,2019,2021,2022,2023)
+telvsodin(htncordta, summ1gemdatahtn,'uur',
           yrboth,"""Teldata lussen in/uit Houten vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","htniuODINcmp") 
 
@@ -534,7 +653,7 @@ idfwijkmy=pd.concat(idfwijkmy)
 
 targgem =352
 #targgemcode = 'GM%04.0f'%targgem
-(allgem_CBSsum,summ1gemdata)=selgemyrs(targgem)
+(allgem_CBSsum,summ1gemdatawijk)=selgemyrs(targgem)
 #summ1gemdata =pd.read_pickle ("../data/gem1odin_"+targgemcode+".pkl")
 
 if (not suprtests):   
@@ -567,13 +686,18 @@ wijkcordta=ndwimport.merge_initest(idfwijkmy,wijkri_config)
 wijkcordta=wijkcordta[wijkcordta['centrum']=='WijkbD']
 wijkcordta['Balans']=wijkcordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * wijkcordta['Intensiteit']
 
-summsur= wijkcordta.groupby(['uur','richting','perstart']).agg('sum')[['Intensiteit']].reset_index()
+# +
+excorona=[2016,2017,2020,2021]
+wijkcordtanc = wijkcordta[ (wijkcordta['perstart'].dt.year.isin(excorona)==False) ]
+
+summsur= wijkcordtanc.groupby(['uur','richting','perstart']).agg('sum')[['Intensiteit']].reset_index()
 sns.lineplot(data=summsur,x='uur',y='Intensiteit',hue='richting',style='perstart')
 plt.title('''Totaal per uur en richting op werkdagen 2018-2025''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 fig.savefig("../output/wijkrichttot.svg",dpi=300, bbox_inches='tight')
+# -
 
-summsur= wijkcordta.groupby(['uur','richting','perstart']).agg('sum')[['Balans']].reset_index()
+summsur= wijkcordtanc.groupby(['uur','richting','perstart']).agg('sum')[['Balans']].reset_index()
 sns.lineplot(data=summsur,x='uur',y='Balans',hue='richting',style='perstart')
 plt.title('''Balans per uur en richting op werkdagen 2018-2025''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -592,29 +716,34 @@ print(summswijk25)
 show_numbers(summswijk25,'Intensiteit',0.15,
              'Werkdagen 2025 0-24 hrs','wijkmeetptovar',pltparawijk)
 
-
-def adduuriucat(df):
-    df['pendelcat'] = 'overig'
-    df['pendelcat'] = df['pendelcat'] .where(False== ((df['uur'].isin((5,6,7,8)) ) & (df['Zoneinuit']=="in")),'bezoekers')
-    df['pendelcat'] = df['pendelcat'] .where(False==( (df['uur'].isin((5,6,7,8)) ) & (df['Zoneinuit']=="uit")),'bewoners')
-    df['pendelcat'] = df['pendelcat'] .where(False== ((df['uur'].isin((15,16,17,18)) ) & (df['Zoneinuit']=="uit")),'bezoekers')
-    df['pendelcat'] = df['pendelcat'] .where(False==( (df['uur'].isin((15,16,17,18)) ) & (df['Zoneinuit']=="in")),'bewoners')
-    return df
 wijkcordtap= adduuriucat(wijkcordta)
 #wijkcordtap
 
 summsur= wijkcordtap.groupby(['pendelcat','perstart']).agg('sum')[['Intensiteit']].reset_index()
-p=sns.lineplot(data=summsur,x='perstart',y='Intensiteit',hue='pendelcat',marker='o')
+summsur['pendeldata'] = 'tellingen '+summsur['pendelcat']
+p=sns.lineplot(data=summsur,x='perstart',y='Intensiteit',hue='pendeldata',marker='o')
 p.set_ylim(bottom=0)
 plt.title('''Pendel aantallen op werkdagen 2018-2025''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 fig.savefig("../output/wijkpendtelcat.svg",dpi=300, bbox_inches='tight')
 
-telvsodin(wijkcordta, summ1gemdata,'Jaar',allyr,"""Teldata lussen in/uit Wijk bij Duurstede vs ODIN aut bestuurder 2018-2022:
+# +
+#nu vergelijkingen ODiN
+# -
+
+pc2wijk=pendelcODIN(summ1gemdatawijk)    
+
+ODINkeygrph(pc2wijk,"Wijk bij Duurstede","wijk") 
+
+ODINuurcheck(pc2wijk,"Wijk bij Duurstede","wijk") 
+
+jrODINpendel( pc2wijk,'Jaar', 'Autobestuurders','FactorV',wijkcordtap,"Wijk bij Duurstede","wijk")     
+
+telvsodin(wijkcordta, summ1gemdatawijk,'Jaar',allyr,"""Teldata lussen in/uit Wijk bij Duurstede vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","cliuODINcmp")  
 
 yrboth=(2019,2021)
-telvsodin(wijkcordta, summ1gemdata,'uur',
+telvsodin(wijkcordta, summ1gemdatawijk,'uur',
           yrboth,"""Teldata lussen in/uit Wijk bij Duurstede vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","htniuODINcmp") 
 
@@ -623,7 +752,7 @@ telvsodin(wijkcordta, summ1gemdata,'uur',
 # -
 
 targgem =216
-(allgem_CBSsum,summ1gemdata)=selgemyrs(targgem)
+(allgem_CBSsum,summ1gemdatacl)=selgemyrs(targgem)
 #summ1gemdata =pd.read_pickle ("../data/gem1odin_"+targgemcode+".pkl")
 
 # +
@@ -699,12 +828,30 @@ summscl = clcordta.groupby(['centrum','richting','Zoneinuit','ID','perstart','Pl
 summscl25=summscl[summscl['perstart'].dt.year.isin([2025])]
 summscl25
 show_numbers(summscl25,'Intensiteit',0.15,
-             'Werkdagen 2025 0-24 hrs','clmeetptovar',pltparacl)
+             'Werkdagen 2025 0-24 hrs','cl_meetptovar',pltparacl)
 
-telvsodin(clcordta, summ1gemdata,'Jaar',allyr,"""Teldata lussen in/uit Cl vs ODIN aut bestuurder 2018-2022:
+clcordtap= adduuriucat(clcordta)
+
+# +
+#nu vergelijkingen ODiN
+# -
+
+pc2cl=pendelcODIN(summ1gemdatacl)    
+
+ODINkeygrph(pc2cl,"Culemborg","cl") 
+
+ODINuurcheck(pc2cl,"Culemborg","cl") 
+
+jrODINpendel( pc2cl,'Jaar', 'Autobestuurders','FactorV',clcordtap,"Culemborg","cl") 
+
+
+
+
+
+telvsodin(clcordta, summ1gemdatacl,'Jaar',allyr,"""Teldata lussen in/uit Cl vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN hoger dan verkeerswegen""","cliuODINcmp")  
 
-telvsodin(clcordta, summ1gemdata,'uur',
+telvsodin(clcordta, summ1gemdatacl,'uur',
           yrboth,"""Teldata lussen in/uit Culemborg vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","htniuODINcmp") 
 
