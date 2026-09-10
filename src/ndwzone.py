@@ -602,15 +602,59 @@ def jrODINpendel(pc2, fieldsplit,title,valfield,teldat,legloc,locabbr):
     summsur['Jaar'] = summsur['perstart'].dt.year
     cframe=pd.concat([dagg,summsur])
 #    print(cframe)
-    p=sns.lineplot(data=cframe,x='Jaar',y='Intensiteit',hue='pendelcat',style='bron',marker='o')
+    fig, ax= plt.subplots(1, 1,figsize=(6,6))
+    p=sns.lineplot(ax=ax,data=cframe,x='Jaar',y='Intensiteit',hue='pendelcat',style='bron',marker='o')
     p.set_ylim(bottom=0)
-    plt.title('Pendel aantallen '+legloc+' per werkdag')
+    plt.title('Pendel aantallen Auto bestuurders '+legloc+' per werkdag')
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     fig.savefig("../output/"+locabbr+"_pendjrvg1.svg",dpi=300, bbox_inches='tight')    
     
 jrODINpendel(pc2htn ,'Jaar', 'Autobestuurders','FactorV',htncordtap,"Houten","htn") 
-# -
+# +
+def datplotcumcatjr(datin, fieldsplit,valfield,mult,jaarnorm):
+    dat=datin.copy();
+    dat[valfield] = dat[valfield].where(dat['pendelcat']  !=lokaallabel,0.5 * dat[valfield])
+    dagg = dat.groupby (['Jaar',fieldsplit] )[[valfield]].agg('sum')
+    dagg = dagg*mult
+    dagg= dagg.reset_index().sort_values(fieldsplit)
+    dagg[valfield]=dagg.groupby(['Jaar'])[valfield].cumsum()
+    if jaarnorm:
+        norms=dagg.rename(columns={valfield:'maxv'}).groupby(['Jaar'])['maxv'].max().reset_index()
+#        print(norms)
+        dagg=dagg.merge(norms)
+        dagg[valfield] /= 0.01*dagg['maxv']
+    dagg['opdeling'] =fieldsplit
+    return dagg
+    
+def modplotopdcatjr(fig,ax,dat, fieldsplit,title,valfield,jaarnorm):
+    mult=7/5/365;
+    dagg=datplotcumcatjr(dat, fieldsplit,valfield,mult,jaarnorm ) 
+    dagg=dagg.sort_values([fieldsplit,'Jaar'],ascending=[True,True])
+    
+#    dagg['Jaar'] += dagg['opdeling'] .map(fieldsplit)
 
+    hues=dagg[fieldsplit].unique()
+#    print(hues[::-1])
+    sns.barplot(ax=ax,data=dagg,x='Jaar', y= valfield , 
+                hue=fieldsplit,dodge=0,hue_order=hues[::-1])
+    leglabels= {'WoGem':'Woongemeente','KHvm_expl' : 'Hoofdvervoermiddel'}
+    ax.legend(title=leglabels[fieldsplit], bbox_to_anchor=(1.01, 0.95), loc=2, borderaxespad=0.,framealpha=0)
+    ax.set_title(title )
+    #return daggcum
+
+def ODINjrgrph(pc2,legloc,locabbr):
+    fig, axs = plt.subplots(2, 2,figsize=(12,12))
+    fig.subplots_adjust(hspace=0.4,wspace=0.5)
+    modplotopdcatjr(fig,axs[0,1],pc2,'KHvm_expl', 'Alle verplaatsingen per werkdag '+legloc,'FactorV',False)
+    modplotopdcatjr(fig,axs[1,1],pc2,'KHvm_expl', 'Modal share per werkdag '+legloc,'FactorV',True)
+    gemafstbest=pc2[pc2['KHvm']==1].groupby(['Jaar','pendelcat']).agg('sum').reset_index()
+    gemafstbest['Afstand'] = gemafstbest['FactorKm'] / gemafstbest['FactorV']
+    sns.lineplot(ax=axs[1,0] , data=gemafstbest,x='Jaar',y='Afstand',marker= 'o',hue='pendelcat')
+    axs[1,0].legend( bbox_to_anchor=(1.01, 0.95), loc=2, borderaxespad=0.,framealpha=0)
+    fig.savefig("../output/"+locabbr+"_ODINjrshr.svg",dpi=300, bbox_inches='tight')  
+
+ODINjrgrph(pc2htn,"Houten","htn") 
+# -
 
 
 
@@ -739,6 +783,8 @@ ODINuurcheck(pc2wijk,"Wijk bij Duurstede","wijk")
 
 jrODINpendel( pc2wijk,'Jaar', 'Autobestuurders','FactorV',wijkcordtap,"Wijk bij Duurstede","wijk")     
 
+ODINjrgrph(pc2wijk,"Wijk bij Duurstede","wijk")   
+
 telvsodin(wijkcordta, summ1gemdatawijk,'Jaar',allyr,"""Teldata lussen in/uit Wijk bij Duurstede vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","cliuODINcmp")  
 
@@ -844,7 +890,7 @@ ODINuurcheck(pc2cl,"Culemborg","cl")
 
 jrODINpendel( pc2cl,'Jaar', 'Autobestuurders','FactorV',clcordtap,"Culemborg","cl") 
 
-
+ODINjrgrph(pc2cl,"Culemborg","cl") 
 
 
 
