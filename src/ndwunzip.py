@@ -33,4 +33,9 @@ os.system('cp -p -u ../../ODINmod01/intermediate/gemdata/gem1*_GM*.pkl ../interm
 
 os.system('ls -ltrac ../data')
 
+getgeop=False
+if getgeop:
+    os.system("pip install geopandas")
+    os.system("pip install contextily")
+
 

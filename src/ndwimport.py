@@ -12,10 +12,8 @@
 #     name: python3
 # ---
 
-# +
-#basic import excel files from pandas tools for viewer tools https://dexter.ndw.nu/opendata
-#berekent ook op/af uit door-stromen bij missende data
-# -
+# ## basic import excel files from pandas tools for viewer tools https://dexter.ndw.nu/opendata
+# #berekent ook op/af uit door-stromen bij missende data
 
 import rdwbas
 
@@ -47,7 +45,7 @@ suprdata= myname in rdwbas.suprdata
 print ('Suprtests',suprtests)
 
 #testfil="../data/intensiteit-snelheid-a27htn-2025.xlsx"
-testfil="../data/intensiteit-snelheid-a27-2025-s2.xlsx"
+testfil="../data/intensiteit-snelheid-a27-2025-s2w.xlsx"
 
 
 def ndw_od_read_overzicht(fn,setuid,collid):
@@ -59,6 +57,10 @@ def ndw_od_read_overzicht(fn,setuid,collid):
     dfd['setuid']=setuid
     dfd['perstart'] = pd.to_datetime(dfd['Periode'].str[0:10],format="%d-%m-%Y")
     dfd['perend'] = pd.to_datetime(dfd['Periode'].str[-10:],format="%d-%m-%Y")+pd.DateOffset(days=1)
+    dfd["Jaar"] = dfd['perstart'].dt.year
+    dfd["nMaand"] = 1+ dfd['perend'].dt.month - dfd['perstart'].dt.month + \
+                       12*dfd['perend'].dt.year - 12*dfd['perstart'].dt.year
+
     #print(dfd)
     #print(dfd.dtypes)
     gdf = geopandas.GeoDataFrame(
@@ -87,8 +89,9 @@ if (not suprtests):
     pland= odf.plot(alpha=0.4)
     cx.add_basemap(pland, source= prov0,crs=odf.crs)
 
-
 # +
+dvdwcol='Dagen van de week'
+dagenwkaant={"weekenden":2, "werkdagen":5}
 def ndw_od_read_intensiteiten(fn,odfin):
     sh='Intensiteit'
     olen=len(odfin)
@@ -104,14 +107,24 @@ def ndw_od_read_intensiteiten(fn,odfin):
     dfd['ID']=dfd['Inheader'].str.replace('^.*\(','').str.replace('. op .*$','')
     dfd=dfd.merge(odfin,how='left')
     dfd['uur']=pd.to_numeric(dfd["uur op de dag"].str[0:2],errors='coerce')
+    dfd["Jaar"] = dfd['perstart'].dt.year
+    dfd["nMaand"] = 1+ dfd['perend'].dt.month - dfd['perstart'].dt.month + \
+                       12*dfd['perend'].dt.year - 12*dfd['perstart'].dt.year
+    dfd["nWeekd"] = dfd[dvdwcol].map(dagenwkaant)
+            
     if 1==1:
+        #Validate that recreated header matches
         dfdc=dfd.copy(deep=True)
         dfdc['sperstart']=dfdc['perstart'].dt.strftime('%Y-%m-%d %H:%M:%S')
         dfdc['sperend']=(dfdc['perend'] - pd.to_timedelta(1, unit='s') ).dt.strftime('%Y-%m-%d %H:%M:%S')
 
         dfdc['exphdr']= 'Gemiddelde voertuigverdeling per uur van '+ dfdc['sperstart'] + ' tot ' + dfdc['sperend'] + ' voor ' + dfd['Naam'] + \
-           ' ('+dfd['ID']+') op '+dfd['Dagen van de week']
+           ' ('+dfdc['ID']+') op '+dfdc[dvdwcol]
         dfdc['dfdexpok']= dfdc['exphdr'] == dfdc['Inheader']
+        dfdct= dfdc[dfdc['dfdexpok'] ==False] 
+        if len(dfdct) >0:
+            print ("Error in headers in"+testfil)
+            print (dfdct)
 #        dfdc.to_excel('../intermediate/ndw_od_read_intensiteiten_test.xlsx')
     return dfd                        
 
@@ -138,12 +151,13 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 #noot: veel lagere waarde voor 2012 voor: RWS01_MONIBAS_0271hrl0669ra_1 	35158.9 	57263.6 
 # -
 
-xlsa27s2list= (glob.glob("../data/intensiteit-snelheid-a27-20??-s2.xlsx"))
+xlsa27s2list= (glob.glob("../data/intensiteit-snelheid-a27-20??-s2[zw].xlsx"))
+xlsa27s2list.sort()
 xlsa27s2list
 
 idfa27my =[ ndw_od_read_overzicht_en_intensiteiten(testfil,"a27my",testfil) for testfil in xlsa27s2list ]
 idfa27my=pd.concat(idfa27my)
-#idfhmy.dtypes
+idfa27my.dtypes
 
 # +
 #de 2 punten bij 687 worden niet gebruikt
@@ -217,6 +231,7 @@ rdata27my=merge_initest(idfa27my,a27id_config)
 a27dta=rdata27my[rdata27my['perstart'].dt.year.isin((2017,2025))]
 
 
+
 def calendafter(datdf):
     return datdf['IDsinds'].max()
 
@@ -226,9 +241,11 @@ def calendafter(datdf):
 #rdata27my
 # -
 
-rd1=rdata27my[rdata27my['perstart'].dt.year<=2099].groupby(["stroom","ID","perstart"])[["Intensiteit"]].sum().reset_index()
-rd2=rd1.pivot(index='ID', columns='perstart', values='Intensiteit')
+rd1=rdata27my[rdata27my['Jaar']<=2099].groupby(["stroom","ID","Jaar"])[["Intensiteit"]].sum().reset_index()
+rd2=rd1.pivot(index='ID', columns='Jaar', values='Intensiteit')
 rd2
+
+
 
 #to get ID list:
 if (not suprtests):
@@ -309,7 +326,7 @@ def ilowhihmplt(strdfi,strval,ccol,split1):
     sns.lineplot(data=a27dtas,x="hm",y="Ilow",hue="opdel",ax=ax)
     sns.lineplot(data=a27dtas,x="hm",y="Ihigh",hue="opdel",ax=ax)
     ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-ilowhihmplt(a27dta,'a27','Intensiteit',['perstart'])              
+ilowhihmplt(a27dta,'a27','Intensiteit',['Jaar'])              
 
 
 # +
@@ -334,17 +351,19 @@ ilowhihmplt(cdata27,'a27','IntensiteitCorr',[])
 
 #op de te corrigeren waarden zou voor de hele periode een volgende correctie nul worden
 #controleer dat cmpdiff van die gecorrigeerde waarden inderdaad rekenruis wordt
-def dlowhihmplt(strdfi,strval,ccol,split1):
+def dlowhihmplt(strdfi,strval,ccol,split1,doplot,docheck):
     a27dtas=summstr_normprep(strdfi,strval,ccol,split1,[],False).reset_index()
     a27dtas['opdel']=  a27dtas['stroom'] + a27dtas['ri'] 
     if len(split1)==1:
         a27dtas['opdel']=a27dtas['opdel'] + (a27dtas[split1[0]].astype(str))
     #display(a27dtas)    
-    sns.lineplot(data=a27dtas,x="hm",y="cmpdiff",hue="opdel")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    assert(a27dtas['cmpdiff'].abs().max() < 1e-6)
+    if doplot:
+        sns.lineplot(data=a27dtas,x="hm",y="cmpdiff",hue="opdel")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    if docheck:
+        assert(a27dtas['cmpdiff'].abs().max() < 1e-6)
 #dlowhihmplt(a27dta,'a27','Intensiteit',[])   
-dlowhihmplt(cdata27,'a27','IntensiteitCorr',[])  
+dlowhihmplt(cdata27,'a27','IntensiteitCorr',[],True,True)  
 
 
 # +
@@ -377,12 +396,16 @@ dlowhiaxplt(cdata27,'a27','IntensiteitCorr',['uur'],False,False)
 dlowhiaxplt(cdata27,'a27','Intensiteit',['uur'],False,False)      
 
 
+
+
+
 # +
 #cdata27.dtypes
 
 # +
+#Dit is een oude routine die alleen werkte voor de y richting
 #nu de EST_xx IDs
-def estcolonlye(strdfi,strval,ccol,ccol2):
+def _estcolonlye(strdfi,strval,ccol,ccol2):
     nabefore=strdfi['IDsinds'].max()
     split0=['perstart','perend']
     split1=split0+['uur']
@@ -404,14 +427,14 @@ def estcolonlye(strdfi,strval,ccol,ccol2):
     rv=udf.drop(['cmpdiffsec'],axis=1)
     return rv
 
-edata27=estcolonlye(cdata27,'a27','IntensiteitCorr','IntensiteitEst') 
+_edata27dontuser=_estcolonlye(cdata27,'a27','IntensiteitCorr','IntensiteitEst') 
 #edata27.sum()
 
 # +
 #nu de EST_xx IDs, debug met 2 jaren, zonder uur
 def estcol(strdfi,strval,ccol,ccol2):
     #nabefore=strdfi['IDsinds'].max()
-    split0=['perstart','perend']
+    split0=['perstart','perend','Jaar','nMaand',dvdwcol]
     split1=split0     +['uur']
 #    strdfs= strdfi[strdfi['perstart']>nabefore]
 #    strdfs= strdfi[strdfi['perend']>nabefore]
@@ -447,13 +470,16 @@ edata27.to_excel("../intermediate/test-2.xlsx")
 #edata27.sum()
 
 # +
+#dus flow: lees ->  merge_initest -> summstr_normprep ->  corrcol  -> estcol
+
+# +
 #cdata27['estfrID'].to_list()
 
 # +
 def estcolchk(strdfi,strval,ccol,ccol2):
     strdfs=strdfi.copy()
     #check 1: same number of NAs
-    c1 = strdfs.groupby(['perstart'])[[ccol,ccol2]].agg('count')
+    c1 = strdfs.groupby(['perstart',dvdwcol])[[ccol,ccol2]].agg('count')
     display (c1)
     #check 2: changed
     strdfs['isadj']= (strdfs[ccol] - strdfs[ccol2]).abs() > 1e-6
@@ -469,9 +495,9 @@ estcolchk(edata27,'a27','IntensiteitCorr','IntensiteitEst')
 
 # -
 
-def estcolvchk(strdfi,strval,ccol,ccol2):
+def estcolvchk(strdfi,strval,ccol,ccol2,doplot,docheck):
     strdfs=strdfi.copy()
-    split0=['perstart','perend']
+    split0=['perstart','perend','Jaar','nMaand',dvdwcol]
     split1=split0     +['uur']
     agrps=['stroom','ri','hm']
     #check 1: same number of NAs
@@ -491,9 +517,11 @@ def estcolvchk(strdfi,strval,ccol,ccol2):
     c2 = factsag.groupby(['perstart','ri','hm'])[['isadj']].agg('sum').reset_index()
     display (c2[c2['isadj'] !=0 ])
     factsagch=factsag[factsag['isadj']]    
-    sns.scatterplot(data=factsagch,x="cmpdiff_"+ccol,y="cmpdiff_"+ccol2,hue="opdel",style="perstart")
-    assert(factsagch["cmpdiff_"+ccol2].abs().max() < 1e-6) 
-estcolvchk(edata27,'a27','IntensiteitCorr','IntensiteitEst')     
+    if doplot:
+        sns.scatterplot(data=factsagch,x="cmpdiff_"+ccol,y="cmpdiff_"+ccol2,hue="opdel",style="perstart")
+    if docheck:
+        assert(factsagch["cmpdiff_"+ccol2].abs().max() < 1e-6) 
+estcolvchk(edata27,'a27','IntensiteitCorr','IntensiteitEst',True,True)     
 
 #hethaal vorig plaatje
 dlowhiaxplt(edata27,'a27','IntensiteitCorr',['uur'],True,False)  
@@ -541,15 +569,16 @@ edata27myd['IntensiteitEstDiff'] = edata27myd['IntensiteitEst']  - edata27myd['I
 plttimesestmy(edata27myd,'IntensiteitEstDiff')  
 plt.title('Intensiteit est - Instensiteit tegenrichting')
 
-
+edata27myw= edata27my[ (edata27my[dvdwcol] =="werkdagen" ) ]
 def plttimeshmmy(dfin,hmval,col):
     fig, ax = plt.subplots()
     dfplt=dfin[dfin['hm'] == hmval]
     sns.lineplot(data=dfplt,x='perstart',y=col,hue='uur',style='ID',alpha=0.6,ax=ax)
     ax.set_ylim(bottom=0)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plttimeshmmy(edata27my[edata27my['uur'].isin([14,15,16])],680,'IntensiteitEst') 
-plt.title('middagspits zuid voor verhoudingen')
+plttimeshmmy(edata27myw[ (edata27myw['uur'].isin([14,15,16]) ) 
+                        ],680,'IntensiteitEst') 
+plt.title('middagspits zuid werkdagen voor verhoudingen')
 
 edata27my.dtypes
 
@@ -585,14 +614,14 @@ def pltjaaropaf(dfin,strval,col,hmset, _scaledr,_scaledrinv,titletxt):
                      x='perstart',y=col,hue='opdel',style="afop",ax=ax2)
     ax1.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=4.)
     
-pltjaaropaf(edata27my,'a27','IntensiteitEst',[680,681],_scaledr27, _scaledrinv27,
+pltjaaropaf(edata27myw,'a27','IntensiteitEst',[680,681],_scaledr27, _scaledrinv27,
             "A27 afrit Houten opaf en door/4 werkdagen :  l: zuidwaarts, r : noordwaards" )
 # -
 
-pltjaaropaf(edata27my[edata27my["uur"].isin((16,17))],'a27','IntensiteitEst',[680,681],_scaledr27, _scaledrinv27,
+pltjaaropaf(edata27myw[edata27myw["uur"].isin((16,17))],'a27','IntensiteitEst',[680,681],_scaledr27, _scaledrinv27,
             "A27 afrit Houten opaf en door/4 aspits werkdagen :  l: zuidwaarts, r : noordwaards" )
 
-pltjaaropaf(edata27my[edata27my["uur"].isin((7,8))],'a27','IntensiteitEst',[680,681],_scaledr27, _scaledrinv27,
+pltjaaropaf(edata27myw[edata27myw["uur"].isin((7,8))],'a27','IntensiteitEst',[680,681],_scaledr27, _scaledrinv27,
             "A27 afrit Houten opaf en door/4 ospits werkdagen :  l: zuidwaarts, r : noordwaards" )
 
 
