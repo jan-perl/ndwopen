@@ -81,7 +81,7 @@ stationplc
 
 if (not suprtests):
     plotbnkpts=False
-    odfhtn= ndwimport.ndw_od_read_overzicht(xlshtns2list[0],"testseq12","testcoll20260522")
+    odfhtn= ndwimport.ndw_od_read_overzicht(xlshtns2list[-1],"testseq12","testcoll20260522")
     #odfbnk=odfbnk[odfbnk['Lengtegraad']>5]
 #    display(odfbnk)
     fig, ax = plt.subplots()
@@ -246,8 +246,7 @@ edata27mycln = ndwimport.edata27mycln
 #print (edata27mycln.columns)
 rd1=edata27mycln [edata27mycln ['perstart'].dt.year<=2099].groupby(["ID","perstart"])[["Intensiteit"]].sum().reset_index()
 rd2=rd1.pivot(index='ID', columns='perstart', values='Intensiteit')
-rd2
-
+#rd2
 
 def combine_cleaned(dfhtn,dfpr):
     newids=dfpr["ID"].unique()
@@ -266,7 +265,7 @@ idfhtnemyC=combine_cleaned(idfhtnmy,edata27mycln)
 # -
 
 idfhtnemy=idfhtnemyC
-idfhtnemy.dtypes
+#idfhtnemy.dtypes
 
 #houten data, oude versie
 htn25fil="../data/intensiteit-snelheid-export(2).xlsx"
@@ -303,10 +302,14 @@ htncordta['Balans']=htncordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * htncordta
 
 htncordtaw=htncordta[htncordta[dvdwcol]=="werkdagen"]
 summs = htncordtaw.groupby(['centrum','richting','Zoneinuit','ID','perstart','Jaar',dvdwcol,'PlotPt','Drlov']).agg('sum')[['Intensiteit']].reset_index()
-summs25=summs[summs['perstart'].dt.year.isin([2024])]
+summs25=summs[summs['perstart'].dt.year.isin([2025])]
 summs25
 
-
+if False: # debug
+    summs = htncordta.pivot_table(index=['richting','Zoneinuit','ID'],columns=[dvdwcol,'Jaar'],
+#                              aggfunc='sum',values= 'Intensiteit' )
+                              aggfunc='sum',values= 'nMaand' )
+    summs
 
 # +
 plot_crs=3857
@@ -396,7 +399,7 @@ plt.title('''Totaal per uur en richting op werkdagen
 2018-2025 ex corona''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-htncordta2y= htncordta[htncordta['Jaar']==2025]
+htncordta2y= htncordta[htncordta['Jaar']>=2024]
 summsur= htncordta2y.groupby(['uur','richting','perstart',dvdwcol]).agg('sum')[['Intensiteit']].reset_index()
 sns.lineplot(data=summsur,x='uur',y='Intensiteit',hue='richting',style='perstart')
 plt.title('''Totaal per uur en richting op werkdagen 
@@ -926,31 +929,43 @@ PGL10_N833-01_hmp_6.94_Re_HTN2699	Culemborg	Geldermalsen	uit			PGL10_N833-01_hmp
 #read CSV string into pandas DataFrame
 clri_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 display(clri_config)
-clcordta=ndwimport.merge_initest(idfwijkmy,clri_config)
-clcordta=clcordta[clcordta['centrum']=='Culemborg']
-clcordta['Balans']=clcordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * clcordta['Intensiteit']
+clcordtar=ndwimport.merge_initest(idfwijkmy,clri_config)
+clcordtar=clcordtar[clcordtar['centrum']=='Culemborg']
+clcordtar['Balans']=clcordtar ['Zoneinuit'].map( {'in':1,'uit':-1 }) * clcordtar['Intensiteit']
 
-clcorrfact={'Beusichem':0.8}
+clcorrfact={'Beusichem':0.75}
 clcorrri={'Beusichem' :'A2'}
-def mksumsur (dtain,corrfact,corrri):
-    sumsgrp= ['uur','richting','perstart','Jaar',dvdwcol]
-    sumsflds=['Intensiteit','Balans']
-    rv= clcordta.groupby(sumsgrp)[sumsflds].agg('sum').reset_index()
+def adddoorrecs (dtain,corrfact,corrri):
+#reduce the original records with fraction
+#and add records in other direction with samve amount, and opposite sign
+    iuom= {'in':'uit','uit':'in' }
+    rv=dtain.copy()
     if len(corrfact.keys()) >0:
         rv['corrf'] = rv ['richting'] .map(corrfact) 
         rv['corrf'].fillna(0.0,inplace=True)
 #        print(rv)
         rva = rv.copy()
         rva ['richting']  = rva ['richting'] .map(corrri)
+        rva['Zoneinuit'] = rva['Zoneinuit'] .map(iuom)
         rva['Intensiteit'] *= (-rv['corrf'])
-        rva['Balans'] *= (-rv['corrf'])
+        rva['Balans'] *= (rv['corrf'])
         rv['Intensiteit'] *= (1-rv['corrf'])
         rv['Balans'] *= (1-rv['corrf'])
         rvc=[rv,rva[rva['richting'].isna()==False] ]
-        rv= pd.concat(rvc).groupby(sumsgrp)[sumsflds].agg('sum').reset_index()
+        rv= pd.concat(rvc).reset_index()
     return rv
+clcordta= adddoorrecs (clcordtar,clcorrfact,clcorrri)
+if False:
+    print (clcordtar[['Intensiteit','Balans']].sum())
+    print (clcordta[['Intensiteit','Balans']].sum())
+
+
+def mksumsur (dtain):
+    sumsgrp= ['uur','richting','perstart','Jaar',dvdwcol]
+    sumsflds=['Intensiteit','Balans']
+    return clcordta.groupby(sumsgrp)[sumsflds].agg('sum').reset_index()
 clcordtaw = clcordta[clcordta[dvdwcol]=="werkdagen"]
-summsurcl= mksumsur (clcordta,clcorrfact,clcorrri)
+summsurcl= mksumsur (clcordta)
 fig, ax = plt.subplots()
 sns.lineplot(ax=ax,data=summsurcl,x='uur',y='Intensiteit',hue='richting',style='perstart')
 ax.set_title('''Totaal per uur en richting op werkdagen 
