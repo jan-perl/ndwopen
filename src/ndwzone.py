@@ -22,6 +22,7 @@ import numpy as np
 import seaborn as sns
 
 import re
+import os
 import io
 import time
 import glob
@@ -158,6 +159,15 @@ elif setprefidxhtn=="s4":
     a27prevrawborrow=[]
 
 idfhtnmyc= pd.concat([idfhtnmy, idfa27my[idfa27my['ID'].isin(a27prevrawborrow)] ] )
+# -
+
+if True: # debug
+    summs = idfhtnmyc.pivot_table(index=['ID'],columns=[dvdwcol,'Jaar'],
+#                              aggfunc='sum',values= 'Intensiteit' )
+                              aggfunc='sum',values= 'nMaand' )
+    summs
+
+summs
 
 # +
 #methode A
@@ -292,9 +302,14 @@ RWS01_MONIBAS_0270vwa0678ra	deelsdoor	A27Zuid	in"""
 #read CSV string into pandas DataFrame
 htncor_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 display(htncor_config)
-htncordta = ndwimport.merge_initest(idfhtnemy,htncor_config,False)
-htncordta=htncordta[htncordta['centrum']=='Houten']
-htncordta['Balans']=htncordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * htncordta['Intensiteit']
+def mkcordta(idfemy,cor_config,selnaam,mytarggem):    
+    cordta = ndwimport.merge_initest(idfemy,cor_config,False)
+    cordta=cordta[cordta['centrum']==selnaam]
+    cordta['Balans']=cordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * cordta['Intensiteit']
+    targgemcode = 'GM%04.0f'%mytarggem
+    cordta['GM_CODE']=targgemcode
+    return cordta
+htncordta = mkcordta(idfhtnemy,htncor_config,'Houten',targgem)
 
 # +
 #htncordta.groupby(["ID"]).agg('sum')
@@ -305,17 +320,19 @@ summs = htncordtaw.groupby(['centrum','richting','Zoneinuit','ID','perstart','Ja
 summs25=summs[summs['perstart'].dt.year.isin([2025])]
 summs25
 
-if False: # debug
+if True: # debug
     summs = htncordta.pivot_table(index=['richting','Zoneinuit','ID'],columns=[dvdwcol,'Jaar'],
 #                              aggfunc='sum',values= 'Intensiteit' )
                               aggfunc='sum',values= 'nMaand' )
     summs
 
+summs
+
 # +
 plot_crs=3857
 plot_crs="epsg:28992"
-pltparahtn={'scleft':134000, 'scright':147000,
-            'sctop':453000, 'scbottom':441000,
+pltparahtn={'scleft':132000, 'scright':147000,
+            'sctop':455000, 'scbottom':441000,
             'minttxsp':1000,
             'geodx':namesptsx,'geody':namesptsy,
            'totalpos':[136000,443000]}
@@ -344,9 +361,9 @@ def show_numbers(summsi,ifield,ascale,tit,fn,pltpa):
         fs=f*ascale*row[ifield]/lori        
         (ex,ey)=(lx-ldx*fs,ly-ldy*fs)
         #print ( (lx, ly, ldx, ldy) )
-        #ax.arrow(lx, ly, ldx, ldy)        
+        #ax.arrow(lx, ly, ldx, ldy)  
         ax.annotate("",xytext=(ex,ey),xy=(lx, ly), 
-                    arrowprops=dict(arrowstyle="<-"))
+                    arrowprops=dict(arrowstyle="<-"),alpha=0.5, color='blue')
         ax.set_xlim(left=pltpa['scleft'], right=pltpa['scright'])
         ax.set_ylim(top=pltpa['sctop'], bottom=pltpa['scbottom'])
         ft = f*max( abs(fs*1.1), pltpa['minttxsp']/lori  )
@@ -354,6 +371,10 @@ def show_numbers(summsi,ifield,ascale,tit,fn,pltpa):
         ax.annotate("%5.0f"%(row[ifield]),xy=(ext,eyt),
                    horizontalalignment='center',
                    verticalalignment='center',alpha=0.5)
+        if (row['Zoneinuit'] =='uit'):
+            sr=-2*ft
+            ax.annotate(row['richting'],xytext=(lx+sr*ldx,ly+sr*ldy),xy=(lx+sr*ldx,ly+sr*ldy),
+                       horizontalalignment='center',verticalalignment='bottom', color='blue')
     ax.annotate("in  %6.0f\n%6.0f\nuit %6.0f"%(totalar[0],totalar[1],totalar[2]),xy=pltpa['totalpos'])
     cx.add_basemap(pland, source= ndwimport.prov0,crs=plot_crs)
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(plaxkm))
@@ -501,8 +522,8 @@ htncordtap= adduuriucat( htncordta)
 #vergelijking tellussen VRI; ook autogebruik binnen gemeente
 # -
 
-xlshtns2list= (glob.glob("../data/intensiteit-snelheid-htn-20?[57]-s2.xlsx"))
-xlshtns2list
+xlshtns2listoud= (glob.glob("../data/intensiteit-snelheid-htn-20?[57]-s2.xlsx"))
+xlshtns2listoud
 
 # +
 #ODIN data
@@ -549,10 +570,10 @@ pltjr4gra(summ1gemdatawerkd,"Jaar",'FactorVActive',
 
 # +
 lokaallabel='lokaal'
-def pendelcODIN(gemdat):
-    df= gemdat[(gemdat['verplricht'] !='buiten')].copy();
+def pendelcODIN(gemdat,dezegem):
+    df= gemdat[(gemdat['verplricht'] !='buiten')].copy(deep=False);
     rscalea={'in':1/365,'uit':1/365, 'binnen': 1/365, 'buiten' : 20000000 / 18000000000/365}
-    gemfield=min(df['VertGem'])
+    #gemfield=min(df['VertGem'])
     df['Uur'] = df['AankUur']
     df['Uur'] = df['Uur'] .where(False== (df['verplricht']=="uit"), df['VertUur'] )
     df['pendelcat'] = 'buitensp'
@@ -563,9 +584,11 @@ def pendelcODIN(gemdat):
     df['pendelcat'] = df['pendelcat'] .where(df['Weekdag'].isin([2,3,4,5,6]) ,"weekendp")
     df['pendelcat'] = df['pendelcat'] .where(False==( df['verplricht'].isin( ["binnen"]  )),lokaallabel)
     df['pendelcat'] = df['pendelcat'] .where(False==( df['verplricht'].isin( ["buiten"]  )),"niet-gem" )
+    mapw={True:'inwoner',False:'niet-inwoner'}
+    df['WoGemCat']= (df['WoGem']==dezegem) .map(mapw)
     return df
 
-pc2htn=pendelcODIN(summ1gemdatahtn)   
+pc2htn=pendelcODIN(summ1gemdatahtn,targgem )   
 
 
 # +
@@ -579,7 +602,7 @@ def datplotcumcatwo(dat, fieldsplit,valfield,mult):
     return dagg
     
 def modplotopdcatwo(fig,ax,dat, fieldsplit,title,valfield,jaarnorm):
-    mult=7/5/365;
+    mult=7/365;
     if jaarnorm:
         jaren=dat['Jaar'].unique()
         mult /= len(jaren)
@@ -597,7 +620,7 @@ def modplotopdcatwo(fig,ax,dat, fieldsplit,title,valfield,jaarnorm):
     ax.set_title(title )
     #return daggcum
 fig, axs = plt.subplots(1, 1)    
-modplotopdcatwo(fig,axs,pc2htn,'WoGem', 'Alle verplaatsingen per dag','FactorV',True)
+modplotopdcatwo(fig,axs,pc2htn,'WoGem', 'Alle verplaatsingen per week','FactorV',True)
 
 
 # +
@@ -722,7 +745,8 @@ jrODINpendelnorm(pc2htn ,'Jaar', 'Autobestuurders','FactorV',htncordtap,allgem_C
 # -
 
 
-allgem_CBSsum[allgem_CBSsum["GM_CODE"] != "rest_NL"][["GM_CODE","GM_NAAM","jaar","AANT_INW"]]
+ninwtab=allgem_CBSsum[allgem_CBSsum["GM_CODE"] != "rest_NL"][["GM_CODE","GM_NAAM","jaar","AANT_INW"]]
+ninwtab
 
 
 
@@ -772,6 +796,7 @@ targgem =352
 
 if (not suprtests):   
     fig, ax = plt.subplots()
+    gdc=[]
     allgem_CBSsum.set_crs(crs="epsg:28992")
     pland=allgem_CBSsum.boundary.plot(color='green',alpha=0.1,ax=ax)
     cx.add_basemap(pland, source= ndwimport.prov0,crs=plot_crs)
@@ -796,9 +821,7 @@ PUT01_N227.11_1	WijkbD	Doorn	uit			PUT01_N227.11_1	PUT01_N229.19_0"""
 #read CSV string into pandas DataFrame
 wijkri_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 display(wijkri_config)
-wijkcordta=ndwimport.merge_initest(idfwijkmy,wijkri_config)
-wijkcordta=wijkcordta[wijkcordta['centrum']=='WijkbD']
-wijkcordta['Balans']=wijkcordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * wijkcordta['Intensiteit']
+wijkcordta = mkcordta(idfwijkmy,wijkri_config,'WijkbD', targgem)
 
 t=wijkcordta.groupby([dvdwcol,'Jaar']) [['Intensiteit']].agg('sum')
 t.reset_index().pivot(columns=dvdwcol,index='Jaar',values='Intensiteit')
@@ -828,7 +851,7 @@ fig.savefig("../output/wijkrichtbal.svg",dpi=300, bbox_inches='tight')
 #    pland.set_ylim(bottom=435000,top=444000)
 #    pland.set_xlim(left=137000,right=149000)
 pltparawijk={'scleft':145000, 'scright':157000,
-            'scbottom':440000,'sctop':450000,
+            'scbottom':440000,'sctop':451000,
             'minttxsp':1000,
             'geodx':namesptsx,'geody':namesptsy,
            'totalpos':[148000,443000]}
@@ -853,7 +876,7 @@ fig.savefig("../output/wijkpendtelcat.svg",dpi=300, bbox_inches='tight')
 #nu vergelijkingen ODiN
 # -
 
-pc2wijk=pendelcODIN(summ1gemdatawijk)    
+pc2wijk=pendelcODIN(summ1gemdatawijk,targgem)    
 
 ODINkeygrph(pc2wijk,"Wijk bij Duurstede","wijk") 
 
@@ -896,7 +919,18 @@ stationplccl = geopandas.GeoDataFrame(
 stationplccl
 # -
 
+#print(odfwijk)
+some_string="""Fecode,ID,Volledige naam,Traject,GPSX,GPSY
+991,A2-corr,van PGL10_N320-01_hmp_1.16_Li_HTN2589,Ut-Gdm,5.19,51.924"""
+df= pd.read_csv(io.StringIO(some_string), sep=",")
+coorplccl = geopandas.GeoDataFrame(
+      df, geometry=geopandas.points_from_xy(df.GPSX, df.GPSY), crs="EPSG:4326")
+print(coorplccl)
+
+
+# +
 if (not suprtests):   
+    gdc=[]
     fig, ax = plt.subplots()
     allgem_CBSsum.set_crs(crs="epsg:28992")
     pland=allgem_CBSsum.boundary.plot(color='green',alpha=0.1,ax=ax)
@@ -910,6 +944,8 @@ if (not suprtests):
 #    pland= add_geodict( odfbnk,gdc,ax,'grey','overig bnk')
 #    pland= add_geodict( ndwimport.odf12,gdc,ax,'red','overig a12')
     pland= add_geodict(  stationplccl,gdc,ax,'green','OV, pont')
+    pland= add_geodict(coorplccl,gdc,ax,'purple','corrpt')
+
 #    pland= add_geodict( odfhtn,gdc,ax,'blue','Gebruikt htn')
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 #    ax.set_aspect(aspect=1.0)
@@ -918,23 +954,22 @@ if (not suprtests):
     namesptsx=(pd.concat(gdc).copy().set_index('ID')['geometry'].x.to_dict())
     namesptsy=(pd.concat(gdc).copy().set_index('ID')['geometry'].y.to_dict())
     #display(namespts)
+# -
 
 some_string="""ID	centrum	richting	Zoneinuit	estfrID	IDsinds	PlotPt	Drlov
 PGL10_N320-01_hmp_1.16_Li_HTN2589	Culemborg	A2	uit			PGL10_N320-01_hmp_1.16_Li_HTN2589	Cl
 PGL10_N320-01_hmp_1.16_Re_HTN2589	Culemborg	A2	in			PGL10_N320-01_hmp_1.16_Re_HTN2589	Cl
-PGL10_N320-04_hmp_8.30_Li_HTN2593	Culemborg	Beusichem	in			PGL10_N320-04_hmp_8.30_Li_HTN2593	Cl
-PGL10_N320-04_hmp_8.30_Re_HTN2593	Culemborg	Beusichem	uit			PGL10_N320-04_hmp_8.30_Re_HTN2593	Cl
+PGL10_N320-04_hmp_8.30_Li_HTN2593	Culemborg	Buren	in			PGL10_N320-04_hmp_8.30_Li_HTN2593	Cl
+PGL10_N320-04_hmp_8.30_Re_HTN2593	Culemborg	Buren	uit			PGL10_N320-04_hmp_8.30_Re_HTN2593	Cl
 PGL10_N833-01_hmp_6.94_Li_HTN2699	Culemborg	Geldermalsen	in			PGL10_N833-01_hmp_6.94_Li_HTN2699	Cl
 PGL10_N833-01_hmp_6.94_Re_HTN2699	Culemborg	Geldermalsen	uit			PGL10_N833-01_hmp_6.94_Re_HTN2699	Cl"""
 #read CSV string into pandas DataFrame
 clri_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 display(clri_config)
-clcordtar=ndwimport.merge_initest(idfwijkmy,clri_config)
-clcordtar=clcordtar[clcordtar['centrum']=='Culemborg']
-clcordtar['Balans']=clcordtar ['Zoneinuit'].map( {'in':1,'uit':-1 }) * clcordtar['Intensiteit']
+clcordtar = mkcordta(idfwijkmy,clri_config,'Culemborg',targgem)
 
-clcorrfact={'Beusichem':0.75}
-clcorrri={'Beusichem' :'A2'}
+clcorrfact={'Buren':0.75}
+clcorrri={'Buren' :'A2'}
 def adddoorrecs (dtain,corrfact,corrri):
 #reduce the original records with fraction
 #and add records in other direction with samve amount, and opposite sign
@@ -949,27 +984,31 @@ def adddoorrecs (dtain,corrfact,corrri):
         rva['Zoneinuit'] = rva['Zoneinuit'] .map(iuom)
         rva['Intensiteit'] *= (-rv['corrf'])
         rva['Balans'] *= (rv['corrf'])
+        rva['PlotPt'] = rva ['richting']+'-corr'
         rv['Intensiteit'] *= (1-rv['corrf'])
         rv['Balans'] *= (1-rv['corrf'])
         rvc=[rv,rva[rva['richting'].isna()==False] ]
         rv= pd.concat(rvc).reset_index()
     return rv
 clcordta= adddoorrecs (clcordtar,clcorrfact,clcorrri)
-if False:
+#check dat totalen wel veranderen, balans niet
+if True:
     print (clcordtar[['Intensiteit','Balans']].sum())
     print (clcordta[['Intensiteit','Balans']].sum())
+
 
 
 def mksumsur (dtain):
     sumsgrp= ['uur','richting','perstart','Jaar',dvdwcol]
     sumsflds=['Intensiteit','Balans']
-    return clcordta.groupby(sumsgrp)[sumsflds].agg('sum').reset_index()
+    return dtain.groupby(sumsgrp)[sumsflds].agg('sum').reset_index()
 clcordtaw = clcordta[clcordta[dvdwcol]=="werkdagen"]
 summsurcl= mksumsur (clcordta)
+#print(summsurcl[['Intensiteit']].sum())
 fig, ax = plt.subplots()
 sns.lineplot(ax=ax,data=summsurcl,x='uur',y='Intensiteit',hue='richting',style='perstart')
-ax.set_title('''Totaal per uur en richting op werkdagen 
-2018-2025 ex corona''')
+ax.set_title('''Totaal per uur en richting 
+weekend en werkdagen per jaar''')
 ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 fig.savefig("../output/clrichtint.svg",dpi=300, bbox_inches='tight')
 
@@ -982,8 +1021,8 @@ fig.savefig("../output/clrichtbal.svg",dpi=300, bbox_inches='tight')
 
 #    pland.set_ylim(bottom=435000,top=444000)
 #    pland.set_xlim(left=137000,right=149000)
-pltparacl={'scleft':137000, 'scright':149000,
-            'scbottom':435000,'sctop':444000,
+pltparacl={'scleft':135000, 'scright':151000,
+            'scbottom':434000,'sctop':444000,
             'minttxsp':1000,
             'geodx':namesptsx,'geody':namesptsy,
            'totalpos':[138000,441000]}
@@ -1000,7 +1039,7 @@ clcordtap= adduuriucat(clcordta)
 #nu vergelijkingen ODiN
 # -
 
-pc2cl=pendelcODIN(summ1gemdatacl)    
+pc2cl=pendelcODIN(summ1gemdatacl,targgem)    
 
 ODINkeygrph(pc2cl,"Culemborg","cl") 
 
@@ -1020,6 +1059,9 @@ telvsodin(clcordta, summ1gemdatacl,'Jaar',allyr,"""Teldata lussen in/uit Cl vs O
 telvsodin(clcordta, summ1gemdatacl,'uur',
           yrboth,"""Teldata lussen in/uit Culemborg vs ODIN aut bestuurder 2018-2022:
         data werkdagen: ODIN sterker Corona effect dan verkeerswegen""","htniuODINcmp") 
+
+telvalidated=pd.concat([htncordtap,wijkcordtap,clcordtap])
+telvalidated.to_pickle('../intermediate/telpend.pkl')
 
 
 
@@ -1046,9 +1088,7 @@ PUT01_N210.31_1	Ijsselstein	Benschop	uit			PUT01_N210.31_1	PUT01_PUVIS_N210.37_0
 #read CSV string into pandas DataFrame
 ijstri_config= pd.read_csv(io.StringIO(some_string), sep="\t")
 display(ijstri_config)
-ijstcordta=ndwimport.merge_initest(idfijstmy,ijstri_config)
-ijstcordta=ijstcordta[ijstcordta['centrum']=='Ijsselstein']
-ijstcordta['Balans']=ijstcordta ['Zoneinuit'].map( {'in':1,'uit':-1 }) * ijstcordta['Intensiteit']
+ijstcordta = mkcordta(idfijstmy,ijstri_config,'Ijsselstein',targgem)
 
 if (not suprtests):   
     fig, ax = plt.subplots()
@@ -1079,5 +1119,14 @@ sns.lineplot(data=summsur,x='uur',y='Balans',hue='richting',style='perstart')
 plt.title('''Totaal per uur en richting op werkdagen 
 2018-2025 ex corona''')
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+# +
+#nu alles bij elkaar; uiteindelijke plaatjes
+# -
+
+telvalidated=pd.concat([htncordtap,wijkcordtap,clcordtap])
+telvalidated.to_pickle('../intermediate/telpend.pkl')
+
+os.system('cp ../intermediate/telpend.pkl ../../ODINmod01/intermediate/telpend.pkl')
 
 
